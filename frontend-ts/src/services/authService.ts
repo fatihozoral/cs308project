@@ -8,7 +8,7 @@
 import axios, { AxiosError } from 'axios';
 import type { LoginCredentials, RegisterData, LoginResponse, RegisterResponse, ApiError } from '@/types/auth.types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/auth';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/auth';
 
 /**
  * Register a new customer account
