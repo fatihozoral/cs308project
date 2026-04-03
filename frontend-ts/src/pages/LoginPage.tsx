@@ -2,6 +2,7 @@ import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import type { LoginCredentials } from '@/types/auth.types';
+import { login as loginAPI } from '@/services/authService';
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
@@ -9,25 +10,25 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, getRedirectPath } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     if (serverError) setServerError('');
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      login('fake-token', {
-        id: 1, name: 'Demo Kullanıcı',
-        email: formData.email || 'demo@tickethub.com',
-        role: 'customer' as const,
-      });
-      navigate('/');
+    try {
+      const response = await loginAPI(formData);
+      login(response.token, response.user);
+      navigate(getRedirectPath(response.user.role));
+    } catch (error: any) {
+      setServerError(error.message || 'Giriş yapılamadı.');
+    } finally {
       setLoading(false);
-    }, 600);
+    }
   };
 
   return (

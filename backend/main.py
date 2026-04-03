@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth
-
+from app.api import auth, events, orders
 app = FastAPI(
     title="CS308 Ticketing Platform - FastAPI Backend",
     version="1.0.0",
@@ -19,6 +18,8 @@ app.add_middleware(
 
 # Connect modular routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(events.router, prefix="/api", tags=["Events"])
+app.include_router(orders.router, prefix="/api", tags=["Orders"])
 
 @app.get("/")
 def read_root():

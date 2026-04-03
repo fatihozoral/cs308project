@@ -17,17 +17,22 @@ interface Event {
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
 
-const MOCK_EVENTS: Event[] = [
-  { id: 1, name: 'Tarkan Konseri', category: 'Konser', date: '15 Nis 2026', time: '21:00', venue: 'Volkswagen Arena', city: 'İstanbul', price: 450, emoji: '🎤', accent: 'from-violet-500/20 to-purple-600/20' },
-  { id: 2, name: 'Galatasaray - Fenerbahçe', category: 'Spor', date: '20 Nis 2026', time: '20:00', venue: 'NEF Stadyumu', city: 'İstanbul', price: 250, emoji: '⚽', accent: 'from-amber-500/20 to-orange-600/20' },
-  { id: 3, name: 'Hamlet - Devlet Tiyatrosu', category: 'Tiyatro', date: '22 Nis 2026', time: '19:30', venue: 'Ankara Devlet Tiyatrosu', city: 'Ankara', price: 120, emoji: '🎭', accent: 'from-blue-500/20 to-indigo-600/20' },
-  { id: 4, name: 'Jolly Joker Festivali', category: 'Festival', date: '1 May 2026', time: '14:00', venue: 'Küçükçiftlik Park', city: 'İstanbul', price: 350, emoji: '🎪', accent: 'from-teal-500/20 to-green-600/20' },
-  { id: 5, name: 'Sertab Erener Konseri', category: 'Konser', date: '5 May 2026', time: '20:00', venue: 'Zorlu PSM', city: 'İstanbul', price: 380, emoji: '🎵', accent: 'from-rose-500/20 to-pink-600/20' },
-  { id: 6, name: 'NBA Maçı - Türkiye Turu', category: 'Spor', date: '10 May 2026', time: '19:00', venue: 'Sinan Erdem', city: 'İstanbul', price: 600, emoji: '🏀', accent: 'from-orange-500/20 to-red-600/20' },
-  { id: 7, name: 'Karagöz ve Hacivat', category: 'Tiyatro', date: '12 May 2026', time: '15:00', venue: 'Şehir Tiyatroları', city: 'İzmir', price: 80, emoji: '🎬', accent: 'from-cyan-500/20 to-blue-600/20' },
-  { id: 8, name: 'Rock Festivali 2026', category: 'Festival', date: '20 May 2026', time: '16:00', venue: 'İTÜ Stadyumu', city: 'İstanbul', price: 500, emoji: '🤘', accent: 'from-red-500/20 to-rose-600/20' },
-  { id: 9, name: 'Ceza Konseri', category: 'Konser', date: '25 May 2026', time: '21:00', venue: 'Harbiye Açıkhava', city: 'İstanbul', price: 300, emoji: '🎶', accent: 'from-indigo-500/20 to-violet-600/20' },
-  { id: 10, name: 'Beşiktaş - Trabzonspor', category: 'Spor', date: '30 May 2026', time: '18:30', venue: 'Tüpraş Stadyumu', city: 'İstanbul', price: 200, emoji: '🏟️', accent: 'from-slate-500/20 to-gray-600/20' },
+import axios from 'axios';
+import { getAuthHeader } from '@/services/authService';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
+
+const ACCENTS = [
+  'from-violet-500/20 to-purple-600/20',
+  'from-amber-500/20 to-orange-600/20',
+  'from-blue-500/20 to-indigo-600/20',
+  'from-teal-500/20 to-green-600/20',
+  'from-rose-500/20 to-pink-600/20',
+  'from-orange-500/20 to-red-600/20',
+  'from-cyan-500/20 to-blue-600/20',
+  'from-red-500/20 to-rose-600/20',
+  'from-indigo-500/20 to-violet-600/20',
+  'from-slate-500/20 to-gray-600/20',
 ];
 
 const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
@@ -35,16 +40,39 @@ const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
 const EventsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tümü');
+  const [events, setEvents] = useState<Event[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch { return []; } });
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
 
-  useEffect(() => { localStorage.setItem('cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(cart));
+  }, [cart]);
 
-  const filtered = MOCK_EVENTS.filter(e =>
-    (e.name.toLowerCase().includes(search.toLowerCase()) || e.city.toLowerCase().includes(search.toLowerCase())) &&
-    (cat === 'Tümü' || e.category === cat)
-  );
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/events`, {
+          headers: getAuthHeader(),
+          params: { search: search || undefined, category: cat === 'Tümü' ? undefined : cat }
+        });
+        const data = response.data.map((e: any, i: number) => ({
+          ...e,
+          accent: ACCENTS[i % ACCENTS.length]
+        }));
+        setEvents(data);
+      } catch (error) {
+        console.error('Etkinlikler yüklenemedi:', error);
+      }
+    };
+    
+    // We optionally debounce this if we want, but calling every time search changes is fine for now
+    const timeout = setTimeout(() => fetchEvents(), 300);
+    return () => clearTimeout(timeout);
+  }, [search, cat]);
+
+  const filtered = events; // already filtered by API
+
 
   const addToCart = (e: Event) => {
     setCart(prev => { const ex = prev.find(i => i.id === e.id); return ex ? prev.map(i => i.id === e.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { id: e.id, name: e.name, price: e.price, date: e.date, venue: e.venue, quantity: 1 }]; });

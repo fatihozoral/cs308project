@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
+import axios from 'axios';
+import { getAuthHeader } from '@/services/authService';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
+
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
 
@@ -26,17 +31,31 @@ const CartPage: React.FC = () => {
   const fmtCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
   const fmtExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? d.slice(0, 2) + '/' + d.slice(2) : d; };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      const existing = JSON.parse(localStorage.getItem('orders') || '[]');
-      localStorage.setItem('orders', JSON.stringify([{ id: `TH-${Date.now()}`, date: new Date().toLocaleDateString('tr-TR'), items: cart, total: subtotal, status: 'Tamamlandı' }, ...existing]));
+    try {
+      // transform cart items to model expected by backend
+      const items = cart.map(item => ({
+        event_id: item.id,
+        event_name: item.name,
+        event_date: item.date,
+        venue: item.venue,
+        quantity: item.quantity,
+        price: item.price
+      }));
+      
+      await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
+      
       localStorage.removeItem('cart');
       setCart([]);
-      setLoading(false);
       setSuccess(true);
-    }, 1200);
+    } catch (error) {
+      console.error('Sipariş oluşturulamadı:', error);
+      alert('Sipariş oluşturulamadı, lütfen tekrar deneyin.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputCls = 'w-full px-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-accent transition-all';

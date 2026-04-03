@@ -2,6 +2,8 @@ import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { getPasswordStrength, getPasswordStrengthLabel } from '@/utils/validators';
 import type { RegisterData } from '@/types/auth.types';
+import { register as registerAPI } from '@/services/authService';
+
 
 interface RegisterFormData extends RegisterData { confirmPassword: string; }
 
@@ -43,7 +45,17 @@ const RegisterPage: React.FC = () => {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    setTimeout(() => { setSuccess(true); setTimeout(() => navigate('/login'), 2000); setLoading(false); }, 800);
+    try {
+      // Exclude confirmPassword since registerAPI doesn't expect it
+      const { confirmPassword, ...dataToSubmit } = formData;
+      await registerAPI(dataToSubmit);
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 2000);
+    } catch (error: any) {
+      setServerError(error.message || 'Kayıt işlemi başarısız oldu.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputCls = (err?: string) =>

@@ -5,11 +5,10 @@ import Navbar from '@/components/Navbar';
 interface OrderItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
 interface Order { id: string; date: string; items: OrderItem[]; total: number; status: 'Tamamlandı' | 'İptal Edildi' | 'Beklemede'; }
 
-const MOCK_ORDERS: Order[] = [
-  { id: 'TH-20260320', date: '20.03.2026', items: [{ id: 1, name: 'Tarkan Konseri', price: 450, date: '15 Nis 2026', venue: 'Volkswagen Arena', quantity: 2 }], total: 900, status: 'Tamamlandı' },
-  { id: 'TH-20260310', date: '10.03.2026', items: [{ id: 2, name: 'Galatasaray - Fenerbahçe', price: 250, date: '20 Nis 2026', venue: 'NEF Stadyumu', quantity: 3 }], total: 750, status: 'Tamamlandı' },
-  { id: 'TH-20260228', date: '28.02.2026', items: [{ id: 3, name: 'Rock Festivali 2026', price: 500, date: '20 May 2026', venue: 'İTÜ Stadyumu', quantity: 1 }], total: 500, status: 'İptal Edildi' },
-];
+import { getAuthHeader } from '@/services/authService';
+import axios from 'axios';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
 const statusCfg = {
   'Tamamlandı': { dot: 'bg-teal-DEFAULT', text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
@@ -18,10 +17,23 @@ const statusCfg = {
 };
 
 const OrderHistoryPage: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try { const s = JSON.parse(localStorage.getItem('orders') || '[]'); return s.length > 0 ? s : MOCK_ORDERS; } catch { return MOCK_ORDERS; }
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/orders`, { headers: getAuthHeader() });
+        setOrders(res.data);
+      } catch (e) {
+        console.error('Siparişler alınamadı', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+  }, []);
 
   const handleCancel = (orderId: string) => {
     const updated = orders.map(o => o.id === orderId ? { ...o, status: 'İptal Edildi' as const } : o);
@@ -30,11 +42,23 @@ const OrderHistoryPage: React.FC = () => {
     setConfirmId(null);
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-mesh pt-20">
+        <Navbar/>
+        <div className="max-w-lg mx-auto px-8 py-24 text-center">
+          <p className="text-muted">Siparişler yükleniyor...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {orders.length === 0 ? (
         <div className="min-h-screen bg-mesh pt-20">
           <Navbar/>
+
           <div className="max-w-lg mx-auto px-8 py-24 text-center animate-fade-up">
             <div className="glass-strong rounded-3xl p-12">
               <p className="text-6xl mb-5">📋</p>
