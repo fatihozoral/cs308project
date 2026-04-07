@@ -117,3 +117,54 @@ async def get_orders(user=Depends(get_current_user)):
         })
         
     return result
+@router.get("/orders/all")
+async def get_all_orders(user=Depends(get_current_user)):
+    role = user.user_metadata.get("role", "customer")
+    if role != "sales_manager":
+        raise HTTPException(status_code=403, detail="Yetkisiz erişim")
+    
+    orders_res = supabase.table("orders").select("*").order("created_at", desc=True).execute()
+    orders_data = orders_res.data
+    
+    if not orders_data:
+        return []
+    
+    order_ids = [o["id"] for o in orders_data]
+    
+    items_res = supabase.table("order_items").select("*").in_("order_id", order_ids).execute()
+    items_data = items_res.data
+    
+    items_by_order = {}
+    for item in items_data:
+        oid = item["order_id"]
+        if oid not in items_by_order:
+            items_by_order[oid] = []
+        items_by_order[oid].append({
+            "id": item["id"],
+            "event_id": item["event_id"],
+            "name": item["event_name"],
+            "date": item["event_date"],
+            "venue": item["venue"],
+            "quantity": item["quantity"],
+            "price": item["price"]
+        })
+    
+    result = []
+    for o in orders_data:
+        created_at = o["created_at"]
+        try:
+            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            date_str = dt.strftime("%d.%m.%Y")
+        except Exception:
+            date_str = created_at
+        
+        result.append({
+            "id": f"TH-171210{o['id']:04d}",
+            "date": date_str,
+            "total": o["total"],
+            "status": o["status"],
+            "user_id": o["user_id"],
+            "items": items_by_order.get(o["id"], [])
+        })
+    
+    return result
