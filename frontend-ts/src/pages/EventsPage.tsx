@@ -35,6 +35,19 @@ const ACCENTS = [
   'from-slate-500/20 to-gray-600/20',
 ];
 
+const MOCK_EVENTS: Event[] = [
+  { id: 1, name: 'Tarkan Konseri', category: 'Konser', date: '15 Nis 2026', time: '21:00', venue: 'Volkswagen Arena', city: 'İstanbul', price: 450, emoji: '🎤', accent: ACCENTS[0] },
+  { id: 2, name: 'Galatasaray - Fenerbahçe', category: 'Spor', date: '20 Nis 2026', time: '20:00', venue: 'NEF Stadyumu', city: 'İstanbul', price: 250, emoji: '⚽', accent: ACCENTS[1] },
+  { id: 3, name: 'Hamlet - Devlet Tiyatrosu', category: 'Tiyatro', date: '22 Nis 2026', time: '19:30', venue: 'Ankara Devlet Tiyatrosu', city: 'Ankara', price: 120, emoji: '🎭', accent: ACCENTS[2] },
+  { id: 4, name: 'Jolly Joker Festivali', category: 'Festival', date: '1 May 2026', time: '14:00', venue: 'Küçükçiftlik Park', city: 'İstanbul', price: 350, emoji: '🎪', accent: ACCENTS[3] },
+  { id: 5, name: 'Sertab Erener Konseri', category: 'Konser', date: '5 May 2026', time: '20:00', venue: 'Zorlu PSM', city: 'İstanbul', price: 380, emoji: '🎵', accent: ACCENTS[4] },
+  { id: 6, name: 'NBA Maçı - Türkiye Turu', category: 'Spor', date: '10 May 2026', time: '19:00', venue: 'Sinan Erdem', city: 'İstanbul', price: 600, emoji: '🏀', accent: ACCENTS[5] },
+  { id: 7, name: 'Karagöz ve Hacivat', category: 'Tiyatro', date: '12 May 2026', time: '15:00', venue: 'Şehir Tiyatroları', city: 'İzmir', price: 80, emoji: '🎬', accent: ACCENTS[6] },
+  { id: 8, name: 'Rock Festivali 2026', category: 'Festival', date: '20 May 2026', time: '16:00', venue: 'İTÜ Stadyumu', city: 'İstanbul', price: 500, emoji: '🤘', accent: ACCENTS[7] },
+  { id: 9, name: 'Ceza Konseri', category: 'Konser', date: '25 May 2026', time: '21:00', venue: 'Harbiye Açıkhava', city: 'İstanbul', price: 300, emoji: '🎶', accent: ACCENTS[8] },
+  { id: 10, name: 'Beşiktaş - Trabzonspor', category: 'Spor', date: '30 May 2026', time: '18:30', venue: 'Tüpraş Stadyumu', city: 'İstanbul', price: 200, emoji: '🏟️', accent: ACCENTS[9] },
+];
+
 const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
 
 const EventsPage: React.FC = () => {
@@ -62,7 +75,8 @@ const EventsPage: React.FC = () => {
         }));
         setEvents(data);
       } catch (error) {
-        console.error('Etkinlikler yüklenemedi:', error);
+        // TEMPORARY: Fall back to mock data when backend is unavailable
+        setEvents(MOCK_EVENTS);
       }
     };
     
