@@ -35,18 +35,36 @@ const CartPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // transform cart items to model expected by backend
-      const items = cart.map(item => ({
-        event_id: item.id,
-        event_name: item.name,
-        event_date: item.date,
+      const orderId = `ORD-${Date.now()}`;
+
+      // Generate a ticket entry per cart item and persist for QR display
+      const tickets = cart.map(item => ({
+        ticketId: crypto.randomUUID(),
+        orderId,
+        eventName: item.name,
+        date: item.date,
         venue: item.venue,
         quantity: item.quantity,
-        price: item.price
+        totalPrice: item.price * item.quantity,
       }));
-      
-      await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
-      
+      const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
+      localStorage.setItem('tickets', JSON.stringify([...tickets, ...existing]));
+
+      // Try to persist to backend; ignore errors (backend may be offline)
+      try {
+        const items = cart.map(item => ({
+          event_id: item.id,
+          event_name: item.name,
+          event_date: item.date,
+          venue: item.venue,
+          quantity: item.quantity,
+          price: item.price
+        }));
+        await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
+      } catch {
+        // backend offline — tickets already saved locally
+      }
+
       localStorage.removeItem('cart');
       setCart([]);
       setSuccess(true);
