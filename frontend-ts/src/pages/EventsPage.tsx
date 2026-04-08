@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 
@@ -46,6 +46,16 @@ const MOCK_EVENTS: Event[] = [
   { id: 8, name: 'Rock Festivali 2026', category: 'Festival', date: '20 May 2026', time: '16:00', venue: 'İTÜ Stadyumu', city: 'İstanbul', price: 500, emoji: '🤘', accent: ACCENTS[7] },
   { id: 9, name: 'Ceza Konseri', category: 'Konser', date: '25 May 2026', time: '21:00', venue: 'Harbiye Açıkhava', city: 'İstanbul', price: 300, emoji: '🎶', accent: ACCENTS[8] },
   { id: 10, name: 'Beşiktaş - Trabzonspor', category: 'Spor', date: '30 May 2026', time: '18:30', venue: 'Tüpraş Stadyumu', city: 'İstanbul', price: 200, emoji: '🏟️', accent: ACCENTS[9] },
+  { id: 11, name: 'Duman Konseri', category: 'Konser', date: '2 Haz 2026', time: '21:00', venue: 'Bilkent Açıkhava', city: 'Ankara', price: 320, emoji: '🎸', accent: ACCENTS[0] },
+  { id: 12, name: 'Altın Portakal Film Festivali', category: 'Festival', date: '5 Haz 2026', time: '10:00', venue: 'Atatürk Kültür Merkezi', city: 'Antalya', price: 150, emoji: '🎬', accent: ACCENTS[1] },
+  { id: 13, name: 'Beşiktaş - Galatasaray', category: 'Spor', date: '8 Haz 2026', time: '20:00', venue: 'Tüpraş Stadyumu', city: 'İstanbul', price: 350, emoji: '🏆', accent: ACCENTS[2] },
+  { id: 14, name: 'Kenter Tiyatrosu - Yıldızların Altında', category: 'Tiyatro', date: '10 Haz 2026', time: '20:00', venue: 'Kenter Tiyatrosu', city: 'İstanbul', price: 180, emoji: '🎭', accent: ACCENTS[3] },
+  { id: 15, name: 'Madrigal Konseri', category: 'Konser', date: '14 Haz 2026', time: '19:30', venue: 'Ahmet Adnan Saygun Sanat Merkezi', city: 'İzmir', price: 220, emoji: '🎼', accent: ACCENTS[4] },
+  { id: 16, name: 'MMA Türkiye Şampiyonası', category: 'Spor', date: '18 Haz 2026', time: '18:00', venue: 'Bursa Spor Salonu', city: 'Bursa', price: 175, emoji: '🥊', accent: ACCENTS[5] },
+  { id: 17, name: 'Ankara Müzik Festivali', category: 'Festival', date: '21 Haz 2026', time: '15:00', venue: 'Gençlik Parkı Açıkhava', city: 'Ankara', price: 200, emoji: '🎉', accent: ACCENTS[6] },
+  { id: 18, name: 'Çelik Konseri', category: 'Konser', date: '25 Haz 2026', time: '21:00', venue: 'Dokuz Eylül Amfitiyatro', city: 'İzmir', price: 260, emoji: '🎤', accent: ACCENTS[7] },
+  { id: 19, name: 'Açık Hava Sinema Festivali', category: 'Festival', date: '28 Haz 2026', time: '21:30', venue: 'Maçka Parkı', city: 'İstanbul', price: 90, emoji: '🎥', accent: ACCENTS[8] },
+  { id: 20, name: 'Devlet Bale Topluluğu - Kuğu Gölü', category: 'Tiyatro', date: '30 Haz 2026', time: '19:00', venue: 'Devlet Opera ve Balesi', city: 'Ankara', price: 140, emoji: '🩰', accent: ACCENTS[9] },
 ];
 
 const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
@@ -53,10 +63,21 @@ const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
 const EventsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tümü');
+  const [sort, setSort] = useState<'date' | 'price-asc' | 'price-desc'>('date');
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch { return []; } });
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cart));
@@ -85,7 +106,16 @@ const EventsPage: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [search, cat]);
 
-  const filtered = events; // already filtered by API
+  const filtered = events.filter(e => {
+    const matchesCat = cat === 'Tümü' || e.category === cat;
+    const s = search.toLowerCase();
+    const matchesSearch = !s || e.name.toLowerCase().includes(s) || e.city.toLowerCase().includes(s);
+    return matchesCat && matchesSearch;
+  }).sort((a, b) => {
+    if (sort === 'price-asc') return a.price - b.price;
+    if (sort === 'price-desc') return b.price - a.price;
+    return a.date.localeCompare(b.date);
+  });
 
 
   const addToCart = (e: Event) => {
@@ -126,6 +156,25 @@ const EventsPage: React.FC = () => {
                 {c}
               </button>
             ))}
+            <div className="relative" ref={sortRef}>
+              <button onClick={() => setSortOpen(o => !o)}
+                className="flex items-center gap-2 px-5 py-2 rounded-pill text-sm font-medium btn-ghost">
+                {{ date: 'Tarihe Göre', 'price-asc': 'Fiyat: Düşük → Yüksek', 'price-desc': 'Fiyat: Yüksek → Düşük' }[sort]}
+                <svg className={`w-3.5 h-3.5 text-muted transition-transform ${sortOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+              {sortOpen && (
+                <div className="absolute right-0 top-full mt-2 glass-strong rounded-2xl overflow-hidden z-50 min-w-[200px] py-1 shadow-xl">
+                  {([['date', 'Tarihe Göre'], ['price-asc', 'Fiyat: Düşük → Yüksek'], ['price-desc', 'Fiyat: Yüksek → Düşük']] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => { setSort(val); setSortOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${sort === val ? 'text-teal-DEFAULT font-semibold' : 'text-fg'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
