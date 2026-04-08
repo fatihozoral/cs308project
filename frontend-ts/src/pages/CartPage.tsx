@@ -37,7 +37,7 @@ const CartPage: React.FC = () => {
     try {
       const orderId = `ORD-${Date.now()}`;
 
-      // Generate a ticket entry per cart item and persist for QR display
+      // Generate a ticket entry per cart item
       const tickets = cart.map(item => ({
         ticketId: crypto.randomUUID(),
         orderId,
@@ -46,7 +46,10 @@ const CartPage: React.FC = () => {
         venue: item.venue,
         quantity: item.quantity,
         totalPrice: item.price * item.quantity,
+        token: null as string | null,
       }));
+
+      // Save locally first (fallback if backend is offline)
       const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
       localStorage.setItem('tickets', JSON.stringify([...tickets, ...existing]));
 
@@ -60,9 +63,18 @@ const CartPage: React.FC = () => {
           quantity: item.quantity,
           price: item.price
         }));
-        await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
+        const res = await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
+        const backendTokens: string[] = res.data.tokens || [];
+
+        // Overwrite tickets with real backend tokens
+        const ticketsWithTokens = tickets.map((t, i) => ({
+          ...t,
+          token: backendTokens[i] ?? null,
+        }));
+        const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
+        localStorage.setItem('tickets', JSON.stringify([...ticketsWithTokens, ...existing]));
       } catch {
-        // backend offline — tickets already saved locally
+        // backend offline — tickets already saved locally without tokens
       }
 
       localStorage.removeItem('cart');

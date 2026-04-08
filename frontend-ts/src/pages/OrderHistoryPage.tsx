@@ -11,6 +11,7 @@ interface MockOrder {
   quantity: number;
   totalPrice: number;
   status: 'processing' | 'in-transit' | 'delivered';
+  token?: string | null;
 }
 
 // TEMPORARY: Mock orders — remove when backend is connected
@@ -66,6 +67,7 @@ const OrderHistoryPage: React.FC = () => {
         quantity: t.quantity,
         totalPrice: t.totalPrice,
         status: 'delivered' as const,
+        token: t.token ?? null,
       }));
       return [...realOrders, ...mockOrders];
     } catch {
@@ -106,7 +108,7 @@ const OrderHistoryPage: React.FC = () => {
         <div className="space-y-4">
           {orders.map((order, i) => {
             const sc = statusCfg[order.status];
-            const qrData = JSON.stringify({
+            const qrData = order.token ?? JSON.stringify({
               ticketId: order.id,
               event: order.eventTitle,
               date: order.date,
