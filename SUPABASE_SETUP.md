@@ -1,0 +1,40 @@
+# Supabase Veritabanı Güncelleme Komutları
+
+Yazdığımız kapasite yönetimi, spor müsabakaları kategorileri ve sipariş detaylarındaki kategorizasyonların tam arka plan desteğine kavuşabilmesi için Supabase veritabanında (`ticketing_db`) aşağıdaki **SQL** komutlarını çalıştırmanız gerekmektedir. 
+
+*Not: Eğer Supabase Dashboard kullanıyorsanız, soldaki menüden "SQL Editor" sekmesine tıklayın, "New query" diyerek aşağıdaki sütun ekleme (ALTER TABLE) komutlarını yapıştırın ve "RUN" butonuna basın.*
+
+```sql
+-- ==========================================
+-- 1. EVENTS TABLOSU İÇİN YENİ SÜTUNLAR
+-- ==========================================
+-- Etkinliklerin toplam kapasitesini, anlık kalan kapasitesini 
+-- ve spor müsabakalarındaki gibi özel alanların (VIP vb.) kapasitelerini tutar.
+
+ALTER TABLE public.events 
+ADD COLUMN IF NOT EXISTS total_capacity integer,
+ADD COLUMN IF NOT EXISTS remaining_capacity integer,
+ADD COLUMN IF NOT EXISTS ticket_categories jsonb;
+
+
+-- ==========================================
+-- 2. ORDER_ITEMS (SİPARİŞ DETAYLARI) TABLOSU İÇİN YENİ SÜTUN
+-- ==========================================
+-- Kullanıcının seçtiği Kategori bilgisini (örneğin "VIP" veya "1. Kategori") 
+-- sepetten backend'e iletirken veritabanında tutar.
+
+ALTER TABLE public.order_items 
+ADD COLUMN IF NOT EXISTS category text;
+```
+
+### Örnek Tablo İçeriği (JSONB - `ticket_categories`)
+Spor müsabakalarında bu yapıyı kullanabilmeniz için bir tablo satırında `ticket_categories` JSON alanına manuel olarak girebileceğiniz veya admin panelinizden ayarlayacağınız örnek veri:
+
+```json
+[
+  {"name": "VIP", "price": 1500, "capacity": 100, "remaining": 100},
+  {"name": "1. Kategori", "price": 800, "capacity": 500, "remaining": 500},
+  {"name": "2. Kategori", "price": 500, "capacity": 1500, "remaining": 1500},
+  {"name": "Kale Arkası", "price": 250, "capacity": 3000, "remaining": 3000}
+]
+```

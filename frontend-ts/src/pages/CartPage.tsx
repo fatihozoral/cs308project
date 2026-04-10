@@ -8,7 +8,7 @@ import { getAuthHeader } from '@/services/authService';
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
 
-interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
+interface CartItem { id: number; cartItemId?: string | number; name: string; price: number; date: string; venue: string; quantity: number; category?: string; }
 
 const CartPage: React.FC = () => {
   const { user } = useAuth();
@@ -26,8 +26,8 @@ const CartPage: React.FC = () => {
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
 
-  const updateQty = (id: number, d: number) => setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: i.quantity + d } : i).filter(i => i.quantity > 0));
-  const remove = (id: number) => setCart(prev => prev.filter(i => i.id !== id));
+  const updateQty = (uid: string | number, d: number) => setCart(prev => prev.map(i => (i.cartItemId || i.id) === uid ? { ...i, quantity: i.quantity + d } : i).filter(i => i.quantity > 0));
+  const remove = (uid: string | number) => setCart(prev => prev.filter(i => (i.cartItemId || i.id) !== uid));
   const fmtCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
   const fmtExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? d.slice(0, 2) + '/' + d.slice(2) : d; };
 
@@ -35,18 +35,49 @@ const CartPage: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // transform cart items to model expected by backend
-      const items = cart.map(item => ({
-        event_id: item.id,
-        event_name: item.name,
-        event_date: item.date,
+      const orderId = `ORD-${Date.now()}`;
+
+      // Generate a ticket entry per cart item
+      const tickets = cart.map(item => ({
+        ticketId: crypto.randomUUID(),
+        orderId,
+        eventName: item.name,
+        date: item.date,
         venue: item.venue,
         quantity: item.quantity,
-        price: item.price
+        totalPrice: item.price * item.quantity,
+        token: null as string | null,
       }));
-      
-      await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
-      
+
+      // Save locally first (fallback if backend is offline)
+      const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
+      localStorage.setItem('tickets', JSON.stringify([...tickets, ...existing]));
+
+      // Try to persist to backend; ignore errors (backend may be offline)
+      try {
+        const items = cart.map(item => ({
+          event_id: item.id,
+          event_name: item.name,
+          event_date: item.date,
+          venue: item.venue,
+          quantity: item.quantity,
+          price: item.price,
+          category: item.category
+        }));
+        const res = await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
+        const backendTokens: string[] = res.data.tokens || [];
+
+        // Overwrite tickets with real backend tokens
+        const ticketsWithTokens = tickets.map((t, i) => ({
+          ...t,
+          token: backendTokens[i] ?? null,
+        }));
+        const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
+        localStorage.setItem('tickets', JSON.stringify([...ticketsWithTokens, ...existing]));
+      } catch {
+        // backend offline — tickets already saved locally without tokens
+      }
+
       localStorage.removeItem('cart');
       setCart([]);
       setSuccess(true);
@@ -105,7 +136,7 @@ const CartPage: React.FC = () => {
           {/* Items */}
           <div className="lg:col-span-2 space-y-4">
             {cart.map((item, i) => (
-              <div key={item.id}
+              <div key={item.cartItemId || item.id}
                 className="glass hover:glass-strong rounded-3xl p-5 flex items-center gap-4 transition-all animate-fade-up"
                 style={{ animationDelay: `${i * 0.06}s` }}>
                 <div className="w-12 h-12 rounded-2xl bg-teal-dim border border-teal-DEFAULT/20 flex items-center justify-center flex-shrink-0">
@@ -119,13 +150,13 @@ const CartPage: React.FC = () => {
                   <p className="text-xs text-teal-DEFAULT font-semibold mt-0.5">₺{item.price} / bilet</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => updateQty(item.id, -1)} className="btn-ghost w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold p-0">−</button>
+                  <button onClick={() => updateQty(item.cartItemId || item.id, -1)} className="btn-ghost w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold p-0">−</button>
                   <span className="w-6 text-center font-bold text-fg">{item.quantity}</span>
-                  <button onClick={() => updateQty(item.id, 1)} className="btn-ghost w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold p-0">+</button>
+                  <button onClick={() => updateQty(item.cartItemId || item.id, 1)} className="btn-ghost w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold p-0">+</button>
                 </div>
                 <div className="text-right ml-2">
                   <p className="font-black text-fg">₺{item.price * item.quantity}</p>
-                  <button onClick={() => remove(item.id)} className="text-xs text-muted hover:text-red-400 transition-colors mt-0.5">Kaldır</button>
+                  <button onClick={() => remove(item.cartItemId || item.id)} className="text-xs font-bold text-red-500 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20 px-3 py-1.5 rounded-full transition-colors mt-2">Kaldır</button>
                 </div>
               </div>
             ))}

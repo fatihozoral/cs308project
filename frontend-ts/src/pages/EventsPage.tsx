@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 
@@ -13,6 +13,7 @@ interface Event {
   price: number;
   emoji: string;
   accent: string;
+  remaining_capacity?: number;
 }
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
@@ -40,10 +41,21 @@ const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
 const EventsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tümü');
+  const [sort, setSort] = useState<'date' | 'price-asc' | 'price-desc'>('date');
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch { return []; } });
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cart));
@@ -62,7 +74,8 @@ const EventsPage: React.FC = () => {
         }));
         setEvents(data);
       } catch (error) {
-        console.error('Etkinlikler yüklenemedi:', error);
+        console.error("Failed to fetch events from DB", error);
+        setEvents([]);
       }
     };
     
@@ -71,7 +84,16 @@ const EventsPage: React.FC = () => {
     return () => clearTimeout(timeout);
   }, [search, cat]);
 
-  const filtered = events; // already filtered by API
+  const filtered = events.filter(e => {
+    const matchesCat = cat === 'Tümü' || e.category === cat;
+    const s = search.toLowerCase();
+    const matchesSearch = !s || e.name.toLowerCase().includes(s) || e.city.toLowerCase().includes(s);
+    return matchesCat && matchesSearch;
+  }).sort((a, b) => {
+    if (sort === 'price-asc') return a.price - b.price;
+    if (sort === 'price-desc') return b.price - a.price;
+    return a.date.localeCompare(b.date);
+  });
 
 
   const addToCart = (e: Event) => {
@@ -112,6 +134,25 @@ const EventsPage: React.FC = () => {
                 {c}
               </button>
             ))}
+            <div className="relative" ref={sortRef}>
+              <button onClick={() => setSortOpen(o => !o)}
+                className="flex items-center gap-2 px-5 py-2 rounded-pill text-sm font-medium btn-ghost">
+                {{ date: 'Tarihe Göre', 'price-asc': 'Fiyat: Düşük → Yüksek', 'price-desc': 'Fiyat: Yüksek → Düşük' }[sort]}
+                <svg className={`w-3.5 h-3.5 text-muted transition-transform ${sortOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                </svg>
+              </button>
+              {sortOpen && (
+                <div className="absolute right-0 top-full mt-2 glass-strong rounded-2xl overflow-hidden z-50 min-w-[200px] py-1 shadow-xl">
+                  {([['date', 'Tarihe Göre'], ['price-asc', 'Fiyat: Düşük → Yüksek'], ['price-desc', 'Fiyat: Yüksek → Düşük']] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => { setSort(val); setSortOpen(false); }}
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${sort === val ? 'text-teal-DEFAULT font-semibold' : 'text-fg'}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -124,14 +165,21 @@ const EventsPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filtered.map((event, i) => (
+            {filtered.map((event, i) => {
+              const isSoldOut = event.remaining_capacity === 0;
+              return (
               <div key={event.id}
-                className="glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up"
+                className={`glass rounded-3xl overflow-hidden flex flex-col transition-all group animate-fade-up ${isSoldOut ? 'opacity-70 grayscale' : 'hover:glass-strong hover:scale-[1.02]'}`}
                 style={{ animationDelay: `${i * 0.05}s` }}>
                 {/* Cover */}
                 <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
                   <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }}/>
                   {event.emoji}
+                  {isSoldOut && (
+                    <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center backdrop-blur-sm z-10">
+                      <span className="text-white font-black text-xl tracking-widest drop-shadow-md">TÜKENDİ</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-5 flex flex-col flex-1 gap-3">
@@ -144,15 +192,21 @@ const EventsPage: React.FC = () => {
                     <p>📍 {event.venue}, {event.city}</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <span className="font-black text-fg">₺{event.price}</span>
-                    <button onClick={() => addToCart(event)}
-                      className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
-                      {addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
-                    </button>
+                    {isSoldOut ? (
+                      <span className="font-black text-red-500 text-sm ml-auto mr-auto w-full text-center">TÜKENDİ</span>
+                    ) : (
+                      <>
+                        <span className="font-black text-fg">₺{event.price}</span>
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}`); }}
+                          className="px-6 py-2 rounded-pill text-xs font-bold transition-all btn-gradient">
+                          Bilet Bak
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>

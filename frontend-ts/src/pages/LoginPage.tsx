@@ -2,7 +2,6 @@ import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import type { LoginCredentials } from '@/types/auth.types';
-import { login as loginAPI } from '@/services/authService';
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
@@ -10,7 +9,7 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { login, getRedirectPath } = useAuth();
+  const { login } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -20,14 +19,16 @@ const LoginPage: React.FC = () => {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setServerError('');
     try {
-      const response = await loginAPI(formData);
-      login(response.token, response.user);
-      navigate(getRedirectPath(response.user.role));
-    } catch (error: any) {
-      setServerError(error.message || 'Giriş yapılamadı.');
+        const { login: apiLogin } = await import('@/services/authService');
+        const response = await apiLogin({ email: formData.email, password: formData.password });
+        login(response.token, response.user);
+        navigate('/');
+    } catch (err: any) {
+        setServerError(err.message || 'Giriş işlemi başarısız oldu.');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 

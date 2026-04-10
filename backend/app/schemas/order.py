@@ -8,6 +8,7 @@ class OrderItemBase(BaseModel):
     venue: str
     quantity: int
     price: float
+    category: Optional[str] = None
 
 class CreateOrder(BaseModel):
     items: List[OrderItemBase]
