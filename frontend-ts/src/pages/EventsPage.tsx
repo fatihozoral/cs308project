@@ -13,6 +13,7 @@ interface Event {
   price: number;
   emoji: string;
   accent: string;
+  remaining_capacity?: number;
 }
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
@@ -187,14 +188,21 @@ const EventsPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filtered.map((event, i) => (
+            {filtered.map((event, i) => {
+              const isSoldOut = event.remaining_capacity === 0;
+              return (
               <div key={event.id}
-                className="glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up"
+                className={`glass rounded-3xl overflow-hidden flex flex-col transition-all group animate-fade-up ${isSoldOut ? 'opacity-70 grayscale' : 'hover:glass-strong hover:scale-[1.02]'}`}
                 style={{ animationDelay: `${i * 0.05}s` }}>
                 {/* Cover */}
                 <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
                   <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }}/>
                   {event.emoji}
+                  {isSoldOut && (
+                    <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center backdrop-blur-sm z-10">
+                      <span className="text-white font-black text-xl tracking-widest drop-shadow-md">TÜKENDİ</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-5 flex flex-col flex-1 gap-3">
@@ -207,15 +215,21 @@ const EventsPage: React.FC = () => {
                     <p>📍 {event.venue}, {event.city}</p>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <span className="font-black text-fg">₺{event.price}</span>
-                    <button onClick={() => addToCart(event)}
-                      className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
-                      {addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
-                    </button>
+                    {isSoldOut ? (
+                      <span className="font-black text-red-500 text-sm ml-auto mr-auto w-full text-center">TÜKENDİ</span>
+                    ) : (
+                      <>
+                        <span className="font-black text-fg">₺{event.price}</span>
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}`); }}
+                          className="px-6 py-2 rounded-pill text-xs font-bold transition-all btn-gradient">
+                          Bilet Bak
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>
