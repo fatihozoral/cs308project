@@ -49,9 +49,10 @@ const CANCELLABLE_STATUSES = ['Tamamlandı', 'processing'];
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
 const OrderHistoryPage: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [orders, setOrders] = useState<MockOrder[]>(() => {
+    // Load cancelled IDs from localStorage
+    let cancelledIds: string[] = [];
+    try { cancelledIds = JSON.parse(localStorage.getItem('cancelledOrders') || '[]'); } catch { /* noop */ }
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -91,7 +92,7 @@ const OrderHistoryPage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (orders.length === 0) {
     return (
       <div className="min-h-screen bg-mesh pt-20">
         <Navbar />
@@ -166,6 +167,24 @@ const OrderHistoryPage: React.FC = () => {
                         <p className="text-sm text-fg">{order.date}</p>
                       </div>
                     </div>
+                    <div className="flex items-center gap-3 flex-wrap justify-end">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-xs font-semibold ${sc.bg} ${sc.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                        {sc.label}
+                      </span>
+                      <div className="text-right">
+                        <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-0.5">Toplam</p>
+                        <p className="font-black text-fg">₺{order.totalPrice}</p>
+                      </div>
+                      {CANCELLABLE.includes(order.status) && (
+                        <button
+                          onClick={() => setConfirmId(order.id)}
+                          className="text-xs font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-3 py-1 rounded-pill transition-colors">
+                          İptal Et
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
                     <div className="flex items-center gap-3 flex-wrap justify-end">
                       <span

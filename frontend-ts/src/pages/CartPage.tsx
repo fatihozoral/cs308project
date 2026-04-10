@@ -61,8 +61,7 @@ const CartPage: React.FC = () => {
           event_date: item.date,
           venue: item.venue,
           quantity: item.quantity,
-          price: item.price,
-          category: item.category
+          price: item.price
         }));
         const res = await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
         const backendTokens: string[] = res.data.tokens || [];

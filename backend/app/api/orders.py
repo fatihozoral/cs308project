@@ -70,7 +70,19 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
         
     if items_data:
         supabase.table("order_items").insert(items_data).execute()
-        
+
+    # Create one ticket per quantity per item
+    tickets_data = []
+    for item in order.items:
+        for _ in range(item.quantity):
+            tickets_data.append({
+                "order_id": order_id,
+                "event_id": item.event_id,
+            })
+
+    tickets_res = supabase.table("tickets").insert(tickets_data).execute()
+    tokens = [t["token"] for t in (tickets_res.data or [])]
+
     # Format created order response
     created_at = created_order["created_at"]
     # Parse timestamptz to simple date format DD.MM.YYYY
@@ -84,7 +96,8 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
         "id": f"TH-1712100000{order_id}",
         "status": created_order["status"],
         "total": created_order["total"],
-        "date": date_str
+        "date": date_str,
+        "tokens": tokens
     }
 
 @router.get("/orders")
@@ -139,3 +152,83 @@ async def get_orders(user=Depends(get_current_user)):
         })
         
     return result
+@router.get("/orders/all")
+async def get_all_orders(user=Depends(get_current_user)):
+    role = user.user_metadata.get("role", "customer")
+    if role != "sales_manager":
+        raise HTTPException(status_code=403, detail="Yetkisiz erişim")
+    
+    orders_res = supabase.table("orders").select("*").order("created_at", desc=True).execute()
+    orders_data = orders_res.data
+    
+    if not orders_data:
+        return []
+    
+    order_ids = [o["id"] for o in orders_data]
+    
+    items_res = supabase.table("order_items").select("*").in_("order_id", order_ids).execute()
+    items_data = items_res.data
+    
+    items_by_order = {}
+    for item in items_data:
+        oid = item["order_id"]
+        if oid not in items_by_order:
+            items_by_order[oid] = []
+        items_by_order[oid].append({
+            "id": item["id"],
+            "event_id": item["event_id"],
+            "name": item["event_name"],
+            "date": item["event_date"],
+            "venue": item["venue"],
+            "quantity": item["quantity"],
+            "price": item["price"]
+        })
+    
+    result = []
+    for o in orders_data:
+        created_at = o["created_at"]
+        try:
+            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            date_str = dt.strftime("%d.%m.%Y")
+        except Exception:
+            date_str = created_at
+        
+        result.append({
+            "id": f"TH-171210{o['id']:04d}",
+            "date": date_str,
+            "total": o["total"],
+            "status": o["status"],
+            "user_id": o["user_id"],
+            "items": items_by_order.get(o["id"], [])
+        })
+
+    return result
+
+
+@router.get("/tickets/{token}/verify")
+async def verify_ticket(token: str, user=Depends(get_current_user)):
+    res = supabase.table("tickets").select("*, events(name, event_date, venue)").eq("token", token).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
+    t = res.data
+    return {
+        "valid": True,
+        "is_used": t["is_used"],
+        "used_at": t["used_at"],
+        "event": t["events"]["name"] if t.get("events") else None,
+    }
+
+
+@router.post("/tickets/{token}/redeem")
+async def redeem_ticket(token: str, user=Depends(get_current_user)):
+    res = supabase.table("tickets").select("*").eq("token", token).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
+    if res.data["is_used"]:
+        raise HTTPException(status_code=409, detail="Bu bilet zaten kullanılmış")
+    from datetime import datetime, timezone
+    supabase.table("tickets").update({
+        "is_used": True,
+        "used_at": datetime.now(timezone.utc).isoformat()
+    }).eq("token", token).execute()
+    return {"success": True}

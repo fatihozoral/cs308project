@@ -15,6 +15,7 @@ import OrderHistoryPage from '@/pages/OrderHistoryPage';
 import EventDetailPage from '@/pages/EventDetailPage';
 import AdminSalesPage from '@/pages/AdminSalesPage';
 import AdminProductsPage from '@/pages/AdminProductsPage';
+import ChatBot from '@/components/ChatBot';
 
 /**
  * Protected Route Component
@@ -188,6 +189,7 @@ function App() {
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ChatBot />
       </AuthProvider>
     </Router>
   );

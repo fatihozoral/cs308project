@@ -6,7 +6,7 @@ import type { LoginCredentials } from '@/types/auth.types';
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
   const [serverError, setServerError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -16,20 +16,11 @@ const LoginPage: React.FC = () => {
     if (serverError) setServerError('');
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setServerError('');
-    try {
-        const { login: apiLogin } = await import('@/services/authService');
-        const response = await apiLogin({ email: formData.email, password: formData.password });
-        login(response.token, response.user);
-        navigate('/');
-    } catch (err: any) {
-        setServerError(err.message || 'Giriş işlemi başarısız oldu.');
-    } finally {
-        setLoading(false);
-    }
+    // TEMPORARY: Skip auth, set fake user and navigate — remove when Supabase is configured
+    login('fake-token', { id: '1', name: 'Demo Kullanıcı', email: formData.email || 'demo@tickethub.com', role: 'customer' as const });
+    navigate('/');
   };
 
   return (
