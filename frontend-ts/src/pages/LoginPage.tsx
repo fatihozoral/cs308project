@@ -2,33 +2,25 @@ import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import type { LoginCredentials } from '@/types/auth.types';
-import { login as loginAPI } from '@/services/authService';
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
   const [serverError, setServerError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { login, getRedirectPath } = useAuth();
+  const { login } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     if (serverError) setServerError('');
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    try {
-      const response = await loginAPI(formData);
-      login(response.token, response.user);
-      navigate(getRedirectPath(response.user.role));
-    } catch (error: any) {
-      setServerError(error.message || 'Giriş yapılamadı.');
-    } finally {
-      setLoading(false);
-    }
+    // TEMPORARY: Skip auth, set fake user and navigate — remove when Supabase is configured
+    login('fake-token', { id: '1', name: 'Demo Kullanıcı', email: formData.email || 'demo@tickethub.com', role: 'customer' as const });
+    navigate('/');
   };
 
   return (
