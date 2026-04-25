@@ -1,6 +1,12 @@
+/**
+ * Events Page
+ * CS 308 Online Ticketing Project - TypeScript
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
+import EventDetailModal from '@/components/EventDetailModal';
 
 interface Event {
   id: number;
@@ -69,6 +75,7 @@ const EventsPage: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch { return []; } });
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -96,12 +103,9 @@ const EventsPage: React.FC = () => {
         }));
         setEvents(data);
       } catch (error) {
-        // TEMPORARY: Fall back to mock data when backend is unavailable
         setEvents(MOCK_EVENTS);
       }
     };
-    
-    // We optionally debounce this if we want, but calling every time search changes is fine for now
     const timeout = setTimeout(() => fetchEvents(), 300);
     return () => clearTimeout(timeout);
   }, [search, cat]);
@@ -116,7 +120,6 @@ const EventsPage: React.FC = () => {
     if (sort === 'price-desc') return b.price - a.price;
     return a.date.localeCompare(b.date);
   });
-
 
   const addToCart = (e: Event) => {
     setCart(prev => { const ex = prev.find(i => i.id === e.id); return ex ? prev.map(i => i.id === e.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { id: e.id, name: e.name, price: e.price, date: e.date, venue: e.venue, quantity: 1 }]; });
@@ -133,9 +136,7 @@ const EventsPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-8 py-12">
         {/* Header */}
         <div className="mb-12 animate-fade-up">
-          <h1 className="text-5xl font-black text-fg tracking-tight mb-3">
-            Etkinlikler
-          </h1>
+          <h1 className="text-5xl font-black text-fg tracking-tight mb-3">Etkinlikler</h1>
           <p className="text-muted text-lg">Sana en uygun etkinliği bul ve hemen satın al</p>
         </div>
 
@@ -189,7 +190,8 @@ const EventsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map((event, i) => (
               <div key={event.id}
-                className="glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up"
+                onClick={() => setSelectedEvent(event)}
+                className="glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up cursor-pointer"
                 style={{ animationDelay: `${i * 0.05}s` }}>
                 {/* Cover */}
                 <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
@@ -208,7 +210,8 @@ const EventsPage: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-border">
                     <span className="font-black text-fg">₺{event.price}</span>
-                    <button onClick={() => addToCart(event)}
+                    <button
+                      onClick={e => { e.stopPropagation(); addToCart(event); }}
                       className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
                       {addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
                     </button>
@@ -230,6 +233,14 @@ const EventsPage: React.FC = () => {
           Sepete Git ({cartCount})
         </button>
       )}
+
+      {/* Event Detail Modal */}
+      <EventDetailModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onAddToCart={addToCart}
+        isInCart={selectedEvent ? cart.some(i => i.id === selectedEvent.id) : false}
+      />
     </div>
   );
 };

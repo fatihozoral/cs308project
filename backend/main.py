@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, events, orders
+from app.api import auth, events, orders, comments
+
 app = FastAPI(
     title="CS308 Ticketing Platform - FastAPI Backend",
     version="1.0.0",
@@ -10,7 +11,7 @@ app = FastAPI(
 # CORS configuration for bridging React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For production, change to http://localhost:5173 or your deployed frontend domain
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,6 +21,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(events.router, prefix="/api", tags=["Events"])
 app.include_router(orders.router, prefix="/api", tags=["Orders"])
+app.include_router(comments.router, prefix="/api", tags=["Comments"])
 
 @app.get("/")
 def read_root():
