@@ -4,6 +4,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import Navbar from '@/components/Navbar';
 import axios from 'axios';
 import { getAuthHeader } from '@/services/authService';
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -71,6 +73,72 @@ const OrderHistoryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const downloadPDF = async (order: MockOrder) => {
+    const qrData = order.token ?? JSON.stringify({
+      ticketId: order.id, event: order.eventTitle,
+      date: order.date, venue: order.venue, quantity: order.quantity,
+    });
+    const qrDataUrl = await QRCode.toDataURL(qrData, { width: 200, margin: 1 });
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+    const W = pdf.internal.pageSize.getWidth();
+
+    // Background
+    pdf.setFillColor(22, 27, 34);
+    pdf.rect(0, 0, W, 210, 'F');
+
+    // Header bar
+    pdf.setFillColor(14, 116, 144);
+    pdf.rect(0, 0, W, 18, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('TicketHub - E-Bilet', W / 2, 11, { align: 'center' });
+
+    // Event name
+    pdf.setTextColor(240, 246, 252);
+    pdf.setFontSize(16);
+    pdf.text(order.eventTitle, W / 2, 35, { align: 'center' });
+
+    // Divider
+    pdf.setDrawColor(45, 212, 191);
+    pdf.setLineWidth(0.3);
+    pdf.line(15, 40, W - 15, 40);
+
+    // Details
+    pdf.setFontSize(9);
+    pdf.setTextColor(139, 148, 158);
+    pdf.setFont('helvetica', 'normal');
+    const details = [
+      ['Tarih', order.date],
+      ['Mekan', order.venue],
+      ['Bilet Adedi', `${order.quantity} bilet`],
+      ['Tutar', `${order.totalPrice} TL`],
+      ['Siparis No', order.id],
+    ];
+    details.forEach(([label, value], idx) => {
+      const y = 50 + idx * 9;
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(label + ':', 15, y);
+      pdf.setTextColor(240, 246, 252);
+      pdf.text(value, 60, y);
+    });
+
+    // QR Code
+    pdf.addImage(qrDataUrl, 'PNG', W / 2 - 25, 100, 50, 50);
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text('Bu QR kodu etkinlik girisinde taratiniz', W / 2, 155, { align: 'center' });
+
+    // Footer
+    pdf.setFillColor(14, 116, 144);
+    pdf.rect(0, 195, W, 15, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(7);
+    pdf.text('tickethub.com', W / 2, 204, { align: 'center' });
+
+    pdf.save(`bilet-${order.id}.pdf`);
+  };
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -239,6 +307,16 @@ const OrderHistoryPage: React.FC = () => {
                         <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-0.5">Toplam</p>
                         <p className="font-black text-fg">₺{order.totalPrice}</p>
                       </div>
+                      {order.status !== 'cancelled' && (
+                        <button
+                          onClick={() => downloadPDF(order)}
+                          className="text-xs font-semibold text-teal-400 hover:text-teal-300 border border-teal-500/30 hover:border-teal-400/50 px-3 py-1 rounded-pill transition-colors flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          PDF
+                        </button>
+                      )}
                       {CANCELLABLE.includes(order.status) && (
                         <button
                           onClick={() => setConfirmId(order.id)}
