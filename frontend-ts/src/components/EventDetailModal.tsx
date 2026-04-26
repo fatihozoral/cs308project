@@ -141,7 +141,7 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
           </div>
 
           {/* Price + Add to cart */}
-          <div className="flex items-center justify-between glass rounded-2xl px-5 py-4">
+          <div className="flex items-center justify-between bg-surface-2 border border-border rounded-2xl px-5 py-4">
             <div>
               <p className="text-xs text-muted font-medium mb-0.5">Bilet Fiyatı</p>
               <p className="text-3xl font-black text-fg">₺{event.price}</p>
@@ -207,7 +207,8 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
                     onChange={e => setContent(e.target.value)}
                     placeholder="Bu etkinlik hakkında ne düşünüyorsun?"
                     rows={3}
-                    className="w-full px-4 py-3 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all resize-none"
+                    className="w-full px-4 py-3 rounded-2xl bg-surface-2 border border-border text-fg text-sm placeholder-muted focus:outline-none transition-all resize-none"
+                    style={{ color: '#f0f6fc' }}
                   />
                 </div>
                 <button
