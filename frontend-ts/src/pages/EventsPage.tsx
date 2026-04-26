@@ -74,6 +74,7 @@ const EventsPage: React.FC = () => {
   const sortRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch { return []; } });
+  const [wishlist, setWishlist] = useState<Event[]>(() => { try { return JSON.parse(localStorage.getItem('wishlist') || '[]'); } catch { return []; } });
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const navigate = useNavigate();
@@ -125,6 +126,13 @@ const EventsPage: React.FC = () => {
     setCart(prev => { const ex = prev.find(i => i.id === e.id); return ex ? prev.map(i => i.id === e.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { id: e.id, name: e.name, price: e.price, date: e.date, venue: e.venue, quantity: 1 }]; });
     setAddedIds(prev => new Set(prev).add(e.id));
     setTimeout(() => setAddedIds(prev => { const n = new Set(prev); n.delete(e.id); return n; }), 1500);
+  };
+
+  const toggleWishlist = (e: Event) => {
+    const isIn = wishlist.some(w => w.id === e.id);
+    const updated = isIn ? wishlist.filter(w => w.id !== e.id) : [...wishlist, e];
+    setWishlist(updated);
+    localStorage.setItem('wishlist', JSON.stringify(updated));
   };
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
@@ -197,6 +205,11 @@ const EventsPage: React.FC = () => {
                 <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
                   <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }}/>
                   {event.emoji}
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleWishlist(event); }}
+                    className="absolute top-3 right-3 w-7 h-7 glass rounded-full flex items-center justify-center transition-all hover:scale-110 text-sm">
+                    {wishlist.some(w => w.id === event.id) ? '❤️' : '🤍'}
+                  </button>
                 </div>
 
                 <div className="p-5 flex flex-col flex-1 gap-3">

@@ -22,6 +22,7 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
 
   const links = [
     { to: '/events', label: 'Etkinlikler' },
+    { to: '/wishlist', label: '🤍 İstek Listesi' },
     { to: '/orders', label: 'Siparişlerim' },
   ];
 
