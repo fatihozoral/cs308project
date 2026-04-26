@@ -123,13 +123,26 @@ async def get_orders(user=Depends(get_current_user)):
             
         result.append({
             "id": f"TH-171210{o['id']:04d}",
+            "raw_id": o["id"],
             "date": date_str,
             "total": o["total"],
             "status": o["status"],
             "items": items_by_order.get(o["id"], [])
         })
-        
+
     return result
+
+@router.patch("/orders/{order_id}/cancel")
+async def cancel_order(order_id: int, user=Depends(get_current_user)):
+    user_id = user.id
+    res = supabase.table("orders").select("*").eq("id", order_id).eq("user_id", user_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
+    if res.data["status"] == "İptal Edildi":
+        raise HTTPException(status_code=400, detail="Sipariş zaten iptal edilmiş")
+    supabase.table("orders").update({"status": "İptal Edildi"}).eq("id", order_id).execute()
+    return {"success": True}
+
 @router.get("/orders/all")
 async def get_all_orders(user=Depends(get_current_user)):
     role = user.user_metadata.get("role", "customer")

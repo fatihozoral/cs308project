@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import Navbar from '@/components/Navbar';
+import axios from 'axios';
+import { getAuthHeader } from '@/services/authService';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
 interface MockOrder {
   id: string;
+  rawId?: number;
   eventTitle: string;
   date: string;
   venue: string;
@@ -14,7 +19,6 @@ interface MockOrder {
   token?: string | null;
 }
 
-// TEMPORARY: Mock orders — remove when backend is connected
 const mockOrders: MockOrder[] = [
   {
     id: 'ORD-001',
@@ -54,53 +58,118 @@ const statusCfg = {
 
 const CANCELLABLE: MockOrder['status'][] = ['processing', 'in-transit', 'delivered'];
 
+// Map backend status string to frontend status key
+const mapStatus = (s: string): MockOrder['status'] => {
+  if (s === 'İptal Edildi') return 'cancelled';
+  if (s === 'Tamamlandı') return 'delivered';
+  if (s === 'Yolda') return 'in-transit';
+  return 'processing';
+};
+
 const OrderHistoryPage: React.FC = () => {
-  const [orders, setOrders] = useState<MockOrder[]>(() => {
-    // Load cancelled IDs from localStorage
-    let cancelledIds: string[] = [];
-    try { cancelledIds = JSON.parse(localStorage.getItem('cancelledOrders') || '[]'); } catch { /* noop */ }
-
-    // Merge real purchased tickets from localStorage with mock orders
-    try {
-      const stored = JSON.parse(localStorage.getItem('tickets') || '[]') as Array<{
-        ticketId: string; orderId: string; eventName: string; date: string; venue: string; quantity: number; totalPrice: number; token?: string | null;
-      }>;
-      const applyCancel = (o: MockOrder): MockOrder =>
-        cancelledIds.includes(o.id) ? { ...o, status: 'cancelled' } : o;
-
-      if (stored.length === 0) return mockOrders.map(applyCancel);
-      const realOrders: MockOrder[] = stored.map(t => ({
-        id: t.orderId,
-        eventTitle: t.eventName,
-        date: t.date,
-        venue: t.venue,
-        quantity: t.quantity,
-        totalPrice: t.totalPrice,
-        status: 'delivered' as const,
-        token: t.token ?? null,
-      }));
-      return [...realOrders, ...mockOrders].map(applyCancel);
-    } catch {
-      return mockOrders;
-    }
-  });
-
+  const [orders, setOrders] = useState<MockOrder[]>([]);
+  const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
 
-  const handleCancel = (orderId: string) => {
-    const updated = orders.map(o =>
-      o.id === orderId ? { ...o, status: 'cancelled' as const } : o
-    );
-    setOrders(updated);
-    // Persist cancelled IDs
-    try {
-      const existing: string[] = JSON.parse(localStorage.getItem('cancelledOrders') || '[]');
-      if (!existing.includes(orderId)) {
-        localStorage.setItem('cancelledOrders', JSON.stringify([...existing, orderId]));
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/orders`, { headers: getAuthHeader() });
+        const backendOrders: MockOrder[] = (res.data as any[]).map((o: any) => ({
+          id: o.id,
+          rawId: o.raw_id,
+          eventTitle: o.items?.[0]?.name ?? 'Etkinlik',
+          date: o.items?.[0]?.date ?? o.date,
+          venue: o.items?.[0]?.venue ?? '',
+          quantity: o.items?.reduce((s: number, i: any) => s + i.quantity, 0) ?? 1,
+          totalPrice: o.total,
+          status: mapStatus(o.status),
+          token: null,
+        }));
+        setOrders(backendOrders.length > 0 ? backendOrders : mockOrders);
+      } catch {
+        // Backend offline — fall back to localStorage + mock
+        let cancelledIds: string[] = [];
+        try { cancelledIds = JSON.parse(localStorage.getItem('cancelledOrders') || '[]'); } catch { /* noop */ }
+
+        try {
+          const stored = JSON.parse(localStorage.getItem('tickets') || '[]') as Array<{
+            ticketId: string; orderId: string; eventName: string; date: string; venue: string; quantity: number; totalPrice: number; token?: string | null;
+          }>;
+          const applyCancel = (o: MockOrder): MockOrder =>
+            cancelledIds.includes(o.id) ? { ...o, status: 'cancelled' } : o;
+
+          if (stored.length === 0) {
+            setOrders(mockOrders.map(applyCancel));
+          } else {
+            const realOrders: MockOrder[] = stored.map(t => ({
+              id: t.orderId,
+              eventTitle: t.eventName,
+              date: t.date,
+              venue: t.venue,
+              quantity: t.quantity,
+              totalPrice: t.totalPrice,
+              status: 'delivered' as const,
+              token: t.token ?? null,
+            }));
+            setOrders([...realOrders, ...mockOrders].map(applyCancel));
+          }
+        } catch {
+          setOrders(mockOrders);
+        }
+      } finally {
+        setLoading(false);
       }
-    } catch { /* noop */ }
+    };
+
+    fetchOrders();
+  }, []);
+
+  const handleCancel = async (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    setCancelLoading(true);
+
+    // Try backend cancel
+    if (order.rawId) {
+      try {
+        await axios.patch(`${API_URL}/orders/${order.rawId}/cancel`, {}, { headers: getAuthHeader() });
+      } catch {
+        // Backend offline — fall back to localStorage
+        try {
+          const existing: string[] = JSON.parse(localStorage.getItem('cancelledOrders') || '[]');
+          if (!existing.includes(orderId)) {
+            localStorage.setItem('cancelledOrders', JSON.stringify([...existing, orderId]));
+          }
+        } catch { /* noop */ }
+      }
+    } else {
+      // No rawId (mock/localStorage order) — persist locally
+      try {
+        const existing: string[] = JSON.parse(localStorage.getItem('cancelledOrders') || '[]');
+        if (!existing.includes(orderId)) {
+          localStorage.setItem('cancelledOrders', JSON.stringify([...existing, orderId]));
+        }
+      } catch { /* noop */ }
+    }
+
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+    setCancelLoading(false);
     setConfirmId(null);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-mesh pt-20 flex items-center justify-center">
+        <Navbar />
+        <svg className="animate-spin h-10 w-10 text-teal-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+      </div>
+    );
+  }
 
   if (orders.length === 0) {
     return (
@@ -237,11 +306,11 @@ const OrderHistoryPage: React.FC = () => {
             <h3 className="text-lg font-black text-fg mb-2">Siparişi iptal et?</h3>
             <p className="text-sm text-muted mb-6">Bu işlem geri alınamaz. Ödeme tutarı 3–5 iş günü içinde iade edilecektir.</p>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmId(null)}
+              <button onClick={() => setConfirmId(null)} disabled={cancelLoading}
                 className="flex-1 btn-ghost py-2.5 text-sm font-semibold">Vazgeç</button>
-              <button onClick={() => handleCancel(confirmId)}
-                className="flex-1 py-2.5 text-sm font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors">
-                Evet, İptal Et
+              <button onClick={() => handleCancel(confirmId)} disabled={cancelLoading}
+                className="flex-1 py-2.5 text-sm font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-60">
+                {cancelLoading ? 'İptal ediliyor...' : 'Evet, İptal Et'}
               </button>
             </div>
           </div>
