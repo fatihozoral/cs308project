@@ -11,6 +11,7 @@ import axios from 'axios';
 import { getAuthHeader } from '@/services/authService';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
+const GOOGLE_MAPS_API_KEY = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
 
 interface Event {
   id: number;
@@ -24,6 +25,7 @@ interface Event {
   city: string;
   event_date: string;
   event_time: string;
+  place_id?: string;
 }
 
 interface Comment {
@@ -50,13 +52,79 @@ const AdminProductsPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editingStock, setEditingStock] = useState<{ id: number; value: string } | null>(null);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
 
   const [form, setForm] = useState({
-    name: '', category: 'Konser', emoji: '🎵', price: '',
-    stock_quantity: '', venue: '', city: '', event_date: '', event_time: ''
+    name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
+    stock_quantity: '', venue: '', city: '', event_date: '', event_time: '',
+    place_id: '', lat: null as number | null, lng: null as number | null
   });
 
-  useEffect(() => { fetchEvents(); fetchComments(); }, []);
+  const placeInputRef = React.useRef<HTMLInputElement>(null);
+  const autocompleteRef = React.useRef<google.maps.places.Autocomplete | null>(null);
+
+  useEffect(() => {
+    fetchEvents();
+    fetchComments();
+
+    if (!GOOGLE_MAPS_API_KEY) return;
+
+    if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+      setIsGoogleLoaded(true);
+      return;
+    }
+
+    let existingScript = document.querySelector('script[src*="maps.googleapis.com"]') as HTMLScriptElement;
+    if (existingScript) {
+      existingScript.addEventListener('load', () => setIsGoogleLoaded(true));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setIsGoogleLoaded(true);
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (showModal && isGoogleLoaded && placeInputRef.current) {
+      autocompleteRef.current = new google.maps.places.Autocomplete(placeInputRef.current, {
+        types: ['establishment', 'geocode'],
+      });
+
+      const listener = autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current?.getPlace();
+        if (place) {
+          let locality = '';
+          if (place.address_components) {
+            let locComp = place.address_components.find((c: any) => c.types.includes('locality'));
+            if (!locComp) {
+              locComp = place.address_components.find((c: any) => c.types.includes('administrative_area_level_1'));
+            }
+            if (locComp) {
+              locality = locComp.long_name;
+            }
+          }
+          setForm(p => ({
+            ...p,
+            venue: place.name || p.venue,
+            city: locality || p.city,
+            place_id: place.place_id || '',
+            lat: place.geometry?.location?.lat() || null,
+            lng: place.geometry?.location?.lng() || null,
+          }));
+        }
+      });
+
+      return () => {
+        if (listener && typeof google !== 'undefined' && google.maps && google.maps.event) {
+          google.maps.event.removeListener(listener);
+        }
+      };
+    }
+  }, [showModal, isGoogleLoaded]);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -87,7 +155,7 @@ const AdminProductsPage: React.FC = () => {
         stock_quantity: Number(form.stock_quantity)
       }, { headers: getAuthHeader() });
       setShowModal(false);
-      setForm({ name: '', category: 'Konser', emoji: '🎵', price: '', stock_quantity: '', venue: '', city: '', event_date: '', event_time: '' });
+      setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', stock_quantity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', lat: null, lng: null });
       fetchEvents();
     } catch { alert('Etkinlik eklenemedi.'); }
   };
@@ -126,7 +194,7 @@ const AdminProductsPage: React.FC = () => {
           <div className="w-8 h-8 rounded-xl bg-gradient-cta flex items-center justify-center">
             <svg className="w-4 h-4 text-bg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </div>
           <div>
@@ -168,7 +236,7 @@ const AdminProductsPage: React.FC = () => {
               <span className="text-sm text-muted">{events.length} etkinlik</span>
               <button onClick={() => setShowModal(true)} className="btn-gradient px-5 py-2.5 text-sm font-bold flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
                 </svg>
                 Yeni Etkinlik Ekle
               </button>
@@ -200,6 +268,19 @@ const AdminProductsPage: React.FC = () => {
                             <div>
                               <p className="font-semibold text-fg text-sm">{event.name}</p>
                               <p className="text-xs text-muted">{event.venue}, {event.city}</p>
+                              {event.place_id && GOOGLE_MAPS_API_KEY && (
+                                <div className="mt-2">
+                                  <iframe
+                                    width="200"
+                                    height="120"
+                                    style={{ border: 0, borderRadius: '8px' }}
+                                    loading="lazy"
+                                    allowFullScreen
+                                    referrerPolicy="no-referrer-when-downgrade"
+                                    src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=place_id:${event.place_id}`}
+                                  ></iframe>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -232,7 +313,7 @@ const AdminProductsPage: React.FC = () => {
                         </td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill border text-xs font-semibold ${event.is_active !== false ? 'bg-teal-dim border-teal-DEFAULT/30 text-teal-DEFAULT' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${event.is_active !== false ? 'bg-teal-DEFAULT' : 'bg-red-400'}`}/>
+                            <span className={`w-1.5 h-1.5 rounded-full ${event.is_active !== false ? 'bg-teal-DEFAULT' : 'bg-red-400'}`} />
                             {event.is_active !== false ? 'Aktif' : 'Pasif'}
                           </span>
                         </td>
@@ -273,7 +354,7 @@ const AdminProductsPage: React.FC = () => {
                           {comment.event_name && <p className="text-xs text-muted">{comment.event_name}</p>}
                         </div>
                         <div className="flex gap-0.5 ml-2">
-                          {[1,2,3,4,5].map(s => (
+                          {[1, 2, 3, 4, 5].map(s => (
                             <span key={s} className={`text-sm ${s <= comment.rating ? 'text-amber-400' : 'text-muted'}`}>★</span>
                           ))}
                         </div>
@@ -307,7 +388,11 @@ const AdminProductsPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Etkinlik Adı</label>
-                  <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Etkinlik adı" className={inputCls}/>
+                  <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Etkinlik adı" className={inputCls} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Etkinlik Açıklaması</label>
+                  <textarea required value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Etkinlik hakkında detaylar" className={`${inputCls} min-h-[80px] resize-y`}></textarea>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Kategori</label>
@@ -316,32 +401,38 @@ const AdminProductsPage: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Emoji</label>
-                  <input value={form.emoji} onChange={e => setForm(p => ({ ...p, emoji: e.target.value }))} placeholder="🎵" className={inputCls}/>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">
+                    {form.category === 'Konser' ? 'Sanatçı Adı' : form.category === 'Spor' ? 'Takımlar' : form.category === 'Tiyatro' ? 'Oyuncu / Yönetmen' : form.category === 'Festival' ? 'Başlıca İsimler' : 'Öne Çıkan İsimler'}
+                  </label>
+                  <input required value={form.featured_names} onChange={e => setForm(p => ({ ...p, featured_names: e.target.value }))} placeholder="Örn: Tarkan, Galatasaray..." className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Fiyat (₺)</label>
-                  <input required type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="250" className={inputCls}/>
+                  <input required type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="250" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Stok</label>
-                  <input required type="number" value={form.stock_quantity} onChange={e => setForm(p => ({ ...p, stock_quantity: e.target.value }))} placeholder="100" className={inputCls}/>
+                  <input required type="number" value={form.stock_quantity} onChange={e => setForm(p => ({ ...p, stock_quantity: e.target.value }))} placeholder="100" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Mekan</label>
-                  <input required value={form.venue} onChange={e => setForm(p => ({ ...p, venue: e.target.value }))} placeholder="Zorlu PSM" className={inputCls}/>
+                  <input ref={placeInputRef} required value={form.venue} onChange={e => setForm(p => ({ ...p, venue: e.target.value }))} placeholder="Zorlu PSM" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Şehir</label>
-                  <input required value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} placeholder="İstanbul" className={inputCls}/>
+                  <input required value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} placeholder="İstanbul" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Tarih</label>
-                  <input required type="date" value={form.event_date} onChange={e => setForm(p => ({ ...p, event_date: e.target.value }))} className={inputCls}/>
+                  <input required type="date" value={form.event_date} onChange={e => setForm(p => ({ ...p, event_date: e.target.value }))} className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Saat</label>
-                  <input required type="time" value={form.event_time} onChange={e => setForm(p => ({ ...p, event_time: e.target.value }))} className={inputCls}/>
+                  <input required type="time" value={form.event_time} onChange={e => setForm(p => ({ ...p, event_time: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Emoji</label>
+                  <input value={form.emoji} onChange={e => setForm(p => ({ ...p, emoji: e.target.value }))} placeholder="🎵" className={inputCls} />
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
