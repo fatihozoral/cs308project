@@ -12,6 +12,9 @@ class EventBase(BaseModel):
     price: float
     emoji: Optional[str] = None
     is_active: bool = True
+    total_capacity: Optional[int] = None
+    remaining_capacity: Optional[int] = None
+    ticket_categories: Optional[list] = None
 
 class EventCreate(EventBase):
     pass

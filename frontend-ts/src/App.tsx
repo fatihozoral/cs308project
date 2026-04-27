@@ -12,6 +12,7 @@ import HomePage from '@/pages/HomePage';
 import EventsPage from '@/pages/EventsPage';
 import CartPage from '@/pages/CartPage';
 import OrderHistoryPage from '@/pages/OrderHistoryPage';
+import EventDetailPage from '@/pages/EventDetailPage';
 import AdminSalesPage from '@/pages/AdminSalesPage';
 import AdminProductsPage from '@/pages/AdminProductsPage';
 import WishlistPage from '@/pages/WishlistPage';
@@ -142,6 +143,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <EventsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/events/:eventId"
+            element={
+              <ProtectedRoute>
+                <EventDetailPage />
               </ProtectedRoute>
             }
           />

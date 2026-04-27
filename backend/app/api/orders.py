@@ -36,6 +36,27 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     # Create order items
     items_data = []
     for item in order.items:
+        # Update event capacities
+        event_res = supabase.table("events").select("remaining_capacity, ticket_categories").eq("id", item.event_id).execute()
+        if event_res.data:
+            event_data = event_res.data[0]
+            update_payload = {}
+            if event_data.get("remaining_capacity") is not None:
+                new_rem = max(0, event_data["remaining_capacity"] - item.quantity)
+                update_payload["remaining_capacity"] = new_rem
+                
+            categories = event_data.get("ticket_categories")
+            item_category = getattr(item, "category", None)
+            if categories and item_category:
+                for cat in categories:
+                    if cat.get("name") == item_category:
+                        cat["remaining"] = max(0, cat.get("remaining", 0) - item.quantity)
+                        break
+                update_payload["ticket_categories"] = categories
+                
+            if update_payload:
+                supabase.table("events").update(update_payload).eq("id", item.event_id).execute()
+
         items_data.append({
             "order_id": order_id,
             "event_id": item.event_id,
@@ -43,7 +64,8 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
             "event_date": item.event_date,
             "venue": item.venue,
             "quantity": item.quantity,
-            "price": item.price
+            "price": item.price,
+            "category": item_category
         })
         
     if items_data:
@@ -223,3 +245,27 @@ async def redeem_ticket(token: str, user=Depends(get_current_user)):
         "used_at": datetime.now(timezone.utc).isoformat()
     }).eq("token", token).execute()
     return {"success": True}
+
+@router.patch("/orders/{order_id}/cancel")
+async def cancel_order(order_id: str, user=Depends(get_current_user)):
+    user_id = user.id
+    try:
+        real_id_str = order_id.replace("TH-171210", "")
+        real_id = int(real_id_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Geçersiz sipariş ID formatı")
+        
+    res = supabase.table("orders").select("*").eq("id", real_id).eq("user_id", user_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sipariş bulunamadı veya yetkisizsiniz")
+        
+    order = res.data[0]
+    if order["status"] not in ["Tamamlandı", "processing"]:
+        raise HTTPException(status_code=400, detail="Bu sipariş iptal edilemez")
+        
+    # Update status
+    update_res = supabase.table("orders").update({"status": "cancelled"}).eq("id", real_id).execute()
+    if not update_res.data:
+        raise HTTPException(status_code=500, detail="Sipariş iptal edilirken bir hata oluştu")
+        
+    return {"message": "Sipariş başarıyla iptal edildi"}

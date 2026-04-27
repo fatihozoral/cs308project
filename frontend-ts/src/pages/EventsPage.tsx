@@ -19,6 +19,12 @@ interface Event {
   price: number;
   emoji: string;
   accent: string;
+  remaining_capacity?: number;
+  place_id?: string;
+  lat?: number;
+  lng?: number;
+  description?: string;
+  featured_names?: string;
 }
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
@@ -152,11 +158,11 @@ const EventsPage: React.FC = () => {
         <div className="flex flex-col sm:flex-row gap-4 mb-10">
           <div className="relative flex-1">
             <svg className="absolute left-4 top-4 w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input type="text" placeholder="Etkinlik veya şehir ara..." value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-accent transition-all"/>
+              className="w-full pl-11 pr-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-accent transition-all" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {CATEGORIES.map(c => (
@@ -170,7 +176,7 @@ const EventsPage: React.FC = () => {
                 className="flex items-center gap-2 px-5 py-2 rounded-pill text-sm font-medium btn-ghost">
                 {{ date: 'Tarihe Göre', 'price-asc': 'Fiyat: Düşük → Yüksek', 'price-desc': 'Fiyat: Yüksek → Düşük' }[sort]}
                 <svg className={`w-3.5 h-3.5 text-muted transition-transform ${sortOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
               {sortOpen && (
@@ -230,8 +236,8 @@ const EventsPage: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -241,7 +247,7 @@ const EventsPage: React.FC = () => {
         <button onClick={() => navigate('/cart')}
           className="fixed bottom-8 right-8 btn-gradient px-6 py-3.5 text-sm font-bold flex items-center gap-2 shadow-2xl animate-fade-up">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
           Sepete Git ({cartCount})
         </button>

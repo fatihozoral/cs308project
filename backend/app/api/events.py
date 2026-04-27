@@ -60,7 +60,45 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
             "venue": row["venue"],
             "city": row["city"],
             "price": row["price"],
-            "emoji": row["emoji"]
+            "emoji": row["emoji"],
+            "total_capacity": row.get("total_capacity"),
+            "remaining_capacity": row.get("remaining_capacity"),
+            "ticket_categories": row.get("ticket_categories")
         })
         
     return result
+
+@router.get("/events/{event_id}")
+async def get_event(event_id: int):
+    response = supabase.table("events").select("*").eq("id", event_id).single().execute()
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Etkinlik bulunamadı")
+    
+    row = response.data
+    months = {
+        1: "Oca", 2: "Şub", 3: "Mar", 4: "Nis",
+        5: "May", 6: "Haz", 7: "Tem", 8: "Ağu",
+        9: "Eyl", 10: "Eki", 11: "Kas", 12: "Ara"
+    }
+    date_str = row['event_date']
+    try:
+        year, month, day = date_str.split("-")
+        formatted_date = f"{int(day)} {months[int(month)]} {year}"
+    except Exception:
+        formatted_date = date_str
+        
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "category": row["category"],
+        "date": formatted_date,
+        "time": row["event_time"],
+        "venue": row["venue"],
+        "city": row["city"],
+        "price": row["price"],
+        "emoji": row["emoji"],
+        "description": row.get("description", ""),
+        "total_capacity": row.get("total_capacity"),
+        "remaining_capacity": row.get("remaining_capacity"),
+        "ticket_categories": row.get("ticket_categories")
+    }
