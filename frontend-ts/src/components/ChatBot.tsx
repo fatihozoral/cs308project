@@ -1,10 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
 interface Message {
   id: number;
   text: string;
   sender: 'bot' | 'user';
 }
+
+const fetchOrdersText = async (): Promise<string> => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return 'Siparişlerinizi görmek için lütfen giriş yapın.';
+    const res = await axios.get(`${API_URL}/orders`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const orders = res.data as any[];
+    if (!orders.length) return 'Henüz hiç siparişiniz bulunmuyor.';
+    const lines = orders.map((o: any) => {
+      const statusMap: Record<string, string> = {
+        'Tamamlandı': '✅ Teslim Edildi',
+        'İptal Edildi': '❌ İptal Edildi',
+      };
+      const status = statusMap[o.status] ?? '🔄 İşleniyor';
+      return `• ${o.items?.[0]?.name ?? 'Etkinlik'} — ₺${o.total} — ${status}`;
+    });
+    return `Son siparişleriniz:\n\n${lines.join('\n')}\n\nDetaylar için "Siparişlerim" sayfasını ziyaret edebilirsiniz.`;
+  } catch {
+    return 'Siparişlerinize şu an ulaşılamıyor. Lütfen "Siparişlerim" sayfasını kontrol edin.';
+  }
+};
 
 const getBotResponse = (input: string): string => {
   const msg = input.toLowerCase().trim();
@@ -134,7 +160,12 @@ const ChatBot: React.FC = () => {
     }
   }, [messages, isOpen]);
 
-  const sendMessage = () => {
+  const isOrderQuery = (msg: string) => {
+    const m = msg.toLowerCase();
+    return m.includes('sipariş') || m.includes('biletlerim') || m.includes('aldıklarım') || m.includes('geçmiş');
+  };
+
+  const sendMessage = async () => {
     const trimmed = input.trim();
     if (!trimmed) return;
 
@@ -143,19 +174,20 @@ const ChatBot: React.FC = () => {
     setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      const botReply: Message = {
-        id: Date.now() + 1,
-        text: getBotResponse(trimmed),
-        sender: 'bot',
-      };
-      setMessages((prev) => [...prev, botReply]);
-      setIsTyping(false);
-    }, 700);
+    let replyText: string;
+    if (isOrderQuery(trimmed)) {
+      replyText = await fetchOrdersText();
+    } else {
+      replyText = getBotResponse(trimmed);
+    }
+
+    const botReply: Message = { id: Date.now() + 1, text: replyText, sender: 'bot' };
+    setMessages((prev) => [...prev, botReply]);
+    setIsTyping(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') sendMessage();
+    if (e.key === 'Enter') { sendMessage(); }
   };
 
   return (

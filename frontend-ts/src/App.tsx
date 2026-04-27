@@ -15,6 +15,7 @@ import OrderHistoryPage from '@/pages/OrderHistoryPage';
 import EventDetailPage from '@/pages/EventDetailPage';
 import AdminSalesPage from '@/pages/AdminSalesPage';
 import AdminProductsPage from '@/pages/AdminProductsPage';
+import WishlistPage from '@/pages/WishlistPage';
 import ChatBot from '@/components/ChatBot';
 
 /**
@@ -166,6 +167,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <OrderHistoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/wishlist"
+            element={
+              <ProtectedRoute>
+                <WishlistPage />
               </ProtectedRoute>
             }
           />

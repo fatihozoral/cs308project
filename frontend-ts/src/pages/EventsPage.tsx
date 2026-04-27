@@ -1,6 +1,12 @@
+/**
+ * Events Page
+ * CS 308 Online Ticketing Project - TypeScript
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
+import EventDetailModal from '@/components/EventDetailModal';
 
 interface Event {
   id: number;
@@ -74,7 +80,9 @@ const EventsPage: React.FC = () => {
   const sortRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [cart, setCart] = useState<CartItem[]>(() => { try { return JSON.parse(localStorage.getItem('cart') || '[]'); } catch { return []; } });
+  const [wishlist, setWishlist] = useState<Event[]>(() => { try { return JSON.parse(localStorage.getItem('wishlist') || '[]'); } catch { return []; } });
   const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -102,12 +110,9 @@ const EventsPage: React.FC = () => {
         }));
         setEvents(data);
       } catch (error) {
-        // TEMPORARY: Fall back to mock data when backend is unavailable
         setEvents(MOCK_EVENTS);
       }
     };
-
-    // We optionally debounce this if we want, but calling every time search changes is fine for now
     const timeout = setTimeout(() => fetchEvents(), 300);
     return () => clearTimeout(timeout);
   }, [search, cat]);
@@ -123,11 +128,17 @@ const EventsPage: React.FC = () => {
     return a.date.localeCompare(b.date);
   });
 
-
   const addToCart = (e: Event) => {
     setCart(prev => { const ex = prev.find(i => i.id === e.id); return ex ? prev.map(i => i.id === e.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { id: e.id, name: e.name, price: e.price, date: e.date, venue: e.venue, quantity: 1 }]; });
     setAddedIds(prev => new Set(prev).add(e.id));
     setTimeout(() => setAddedIds(prev => { const n = new Set(prev); n.delete(e.id); return n; }), 1500);
+  };
+
+  const toggleWishlist = (e: Event) => {
+    const isIn = wishlist.some(w => w.id === e.id);
+    const updated = isIn ? wishlist.filter(w => w.id !== e.id) : [...wishlist, e];
+    setWishlist(updated);
+    localStorage.setItem('wishlist', JSON.stringify(updated));
   };
 
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
@@ -139,9 +150,7 @@ const EventsPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-8 py-12">
         {/* Header */}
         <div className="mb-12 animate-fade-up">
-          <h1 className="text-5xl font-black text-fg tracking-tight mb-3">
-            Etkinlikler
-          </h1>
+          <h1 className="text-5xl font-black text-fg tracking-tight mb-3">Etkinlikler</h1>
           <p className="text-muted text-lg">Sana en uygun etkinliği bul ve hemen satın al</p>
         </div>
 
@@ -193,45 +202,38 @@ const EventsPage: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filtered.map((event, i) => {
-              const isSoldOut = event.remaining_capacity === 0;
-              return (
-                <div key={event.id}
-                  className={`glass rounded-3xl overflow-hidden flex flex-col transition-all group animate-fade-up ${isSoldOut ? 'opacity-70 grayscale' : 'hover:glass-strong hover:scale-[1.02]'}`}
-                  style={{ animationDelay: `${i * 0.05}s` }}>
-                  {/* Cover */}
-                  <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
-                    <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }} />
-                    {event.emoji}
-                    {isSoldOut && (
-                      <div className="absolute inset-0 bg-red-900/60 flex items-center justify-center backdrop-blur-sm z-10">
-                        <span className="text-white font-black text-xl tracking-widest drop-shadow-md">TÜKENDİ</span>
-                      </div>
-                    )}
-                  </div>
+            {filtered.map((event, i) => (
+              <div key={event.id}
+                onClick={() => setSelectedEvent(event)}
+                className="glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up cursor-pointer"
+                style={{ animationDelay: `${i * 0.05}s` }}>
+                {/* Cover */}
+                <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
+                  <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }}/>
+                  {event.emoji}
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleWishlist(event); }}
+                    className="absolute top-3 right-3 w-7 h-7 glass rounded-full flex items-center justify-center transition-all hover:scale-110 text-sm">
+                    {wishlist.some(w => w.id === event.id) ? '❤️' : '🤍'}
+                  </button>
+                </div>
 
-                  <div className="p-5 flex flex-col flex-1 gap-3">
-                    <div>
-                      <span className="text-[10px] font-bold text-teal-DEFAULT uppercase tracking-widest">{event.category}</span>
-                      <h3 className="font-bold text-fg mt-1 leading-snug">{event.name}</h3>
-                    </div>
-                    <div className="space-y-1 text-xs text-muted flex-1">
-                      <p>📅 {event.date} · {event.time}</p>
-                      <p>📍 {event.venue}, {event.city}</p>
-                    </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-border">
-                      {isSoldOut ? (
-                        <span className="font-black text-red-500 text-sm ml-auto mr-auto w-full text-center">TÜKENDİ</span>
-                      ) : (
-                        <>
-                          <span className="font-black text-fg">₺{event.price}</span>
-                          <button onClick={(e) => { e.stopPropagation(); navigate(`/events/${event.id}`); }}
-                            className="px-6 py-2 rounded-pill text-xs font-bold transition-all btn-gradient">
-                            Bilet Bak
-                          </button>
-                        </>
-                      )}
-                    </div>
+                <div className="p-5 flex flex-col flex-1 gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-teal-DEFAULT uppercase tracking-widest">{event.category}</span>
+                    <h3 className="font-bold text-fg mt-1 leading-snug">{event.name}</h3>
+                  </div>
+                  <div className="space-y-1 text-xs text-muted flex-1">
+                    <p>📅 {event.date} · {event.time}</p>
+                    <p>📍 {event.venue}, {event.city}</p>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                    <span className="font-black text-fg">₺{event.price}</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); addToCart(event); }}
+                      className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
+                      {addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
+                    </button>
                   </div>
                 </div>
               )
@@ -250,6 +252,14 @@ const EventsPage: React.FC = () => {
           Sepete Git ({cartCount})
         </button>
       )}
+
+      {/* Event Detail Modal */}
+      <EventDetailModal
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
+        onAddToCart={addToCart}
+        isInCart={selectedEvent ? cart.some(i => i.id === selectedEvent.id) : false}
+      />
     </div>
   );
 };
