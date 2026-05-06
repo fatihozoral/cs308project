@@ -16,7 +16,7 @@ async def get_current_user(authorization: str = Header(...)):
     return response.user
 
 @router.get("/events")
-async def get_events(search: Optional[str] = None, category: Optional[str] = None, user=Depends(get_current_user)):
+async def get_events(search: Optional[str] = None, category: Optional[str] = None, sort: Optional[str] = None, user=Depends(get_current_user)):
     query = supabase.table("events").select("*").eq("is_active", True)
     
     # We fetch all events and filter in memory to handle search better, 
@@ -66,6 +66,11 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
             "ticket_categories": row.get("ticket_categories")
         })
         
+    if sort == "price_asc":
+        result.sort(key=lambda e: e["price"])
+    elif sort == "price_desc":
+        result.sort(key=lambda e: e["price"], reverse=True)
+
     return result
 
 @router.get("/events/{event_id}")

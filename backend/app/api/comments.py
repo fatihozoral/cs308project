@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException, Depends
 from app.core.config import supabase
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 router = APIRouter()
@@ -17,7 +17,7 @@ async def get_current_user(authorization: str = Header(...)):
 class CreateComment(BaseModel):
     event_id: int
     content: str
-    rating: int
+    rating: int = Field(..., ge=1, le=5)
 
 class UpdateComment(BaseModel):
     status: str
