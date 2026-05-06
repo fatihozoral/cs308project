@@ -3,6 +3,10 @@ from typing import List
 from app.core.config import supabase
 from app.schemas.order import CreateOrder
 from datetime import datetime
+from pydantic import BaseModel
+
+class UpdateOrderStatus(BaseModel):
+    status: str
 
 router = APIRouter()
 
@@ -40,9 +44,12 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
         event_res = supabase.table("events").select("remaining_capacity, ticket_categories").eq("id", item.event_id).execute()
         if event_res.data:
             event_data = event_res.data[0]
+            remaining = event_data.get("remaining_capacity")
+            if remaining is not None and remaining < item.quantity:
+                raise HTTPException(status_code=400, detail="Yeterli stok yok")
             update_payload = {}
-            if event_data.get("remaining_capacity") is not None:
-                new_rem = max(0, event_data["remaining_capacity"] - item.quantity)
+            if remaining is not None:
+                new_rem = max(0, remaining - item.quantity)
                 update_payload["remaining_capacity"] = new_rem
                 
             categories = event_data.get("ticket_categories")
@@ -216,6 +223,24 @@ async def get_all_orders(user=Depends(get_current_user)):
         })
 
     return result
+
+
+VALID_STATUSES = {"processing", "in-transit", "delivered"}
+
+@router.patch("/orders/{order_id}/status")
+async def update_order_status(order_id: int, body: UpdateOrderStatus, user=Depends(get_current_user)):
+    role = user.user_metadata.get("role", "customer")
+    if role != "product_manager":
+        raise HTTPException(status_code=403, detail="Yetkisiz erişim")
+    if body.status not in VALID_STATUSES:
+        raise HTTPException(status_code=400, detail="Geçersiz durum değeri")
+    res = supabase.table("orders").select("*").eq("id", order_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
+    update_res = supabase.table("orders").update({"status": body.status}).eq("id", order_id).execute()
+    if not update_res.data:
+        raise HTTPException(status_code=500, detail="Durum güncellenemedi")
+    return {"id": order_id, "status": update_res.data[0]["status"]}
 
 
 @router.get("/tickets/{token}/verify")
