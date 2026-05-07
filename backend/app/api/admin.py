@@ -48,7 +48,7 @@ async def create_admin_event(event: EventCreate, user=Depends(require_product_ma
 @router.patch("/events/{event_id}")
 async def update_admin_event(event_id: int, body: dict, user=Depends(require_product_manager)):
     allowed_fields = {
-        "name", "description", "featured_names", "category", "emoji", "price",
+        "name", "description", "featured_names", "category", "emoji", "image_url", "price",
         "total_capacity", "remaining_capacity", "venue", "city", "event_date",
         "event_time", "place_id", "ticket_categories", "is_active"
     }
