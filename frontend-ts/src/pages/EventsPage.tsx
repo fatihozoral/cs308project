@@ -21,6 +21,7 @@ interface Event {
   emoji: string;
   image_url?: string;
   accent: string;
+  total_capacity?: number;
   remaining_capacity?: number;
   place_id?: string;
   lat?: number;
@@ -50,11 +51,24 @@ const ACCENTS = [
 ];
 
 const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
+type SortKey = 'date' | 'price-asc' | 'price-desc' | 'popularity';
+
+const SORT_OPTIONS: Array<[SortKey, string]> = [
+  ['date', 'Tarihe Göre'],
+  ['price-asc', 'Fiyat: Düşük → Yüksek'],
+  ['price-desc', 'Fiyat: Yüksek → Düşük'],
+  ['popularity', 'Popülerliğe Göre'],
+];
+
+const getPopularityScore = (event: Event) => {
+  if (event.total_capacity === undefined || event.remaining_capacity === undefined) return 0;
+  return Math.max(0, event.total_capacity - event.remaining_capacity);
+};
 
 const EventsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tümü');
-  const [sort, setSort] = useState<'date' | 'price-asc' | 'price-desc'>('date');
+  const [sort, setSort] = useState<SortKey>('date');
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
@@ -108,6 +122,7 @@ const EventsPage: React.FC = () => {
   }).sort((a, b) => {
     if (sort === 'price-asc') return a.price - b.price;
     if (sort === 'price-desc') return b.price - a.price;
+    if (sort === 'popularity') return getPopularityScore(b) - getPopularityScore(a);
     return a.date.localeCompare(b.date);
   });
 
@@ -209,14 +224,14 @@ const EventsPage: React.FC = () => {
             <div className="relative" ref={sortRef}>
               <button onClick={() => setSortOpen(o => !o)}
                 className="flex items-center gap-2 px-5 py-2 rounded-pill text-sm font-medium btn-ghost">
-                {{ date: 'Tarihe Göre', 'price-asc': 'Fiyat: Düşük → Yüksek', 'price-desc': 'Fiyat: Yüksek → Düşük' }[sort]}
+                {SORT_OPTIONS.find(([value]) => value === sort)?.[1]}
                 <svg className={`w-3.5 h-3.5 text-muted transition-transform ${sortOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
               {sortOpen && (
                 <div className="absolute right-0 top-full mt-2 glass-strong rounded-2xl overflow-hidden z-50 min-w-[200px] py-1 shadow-xl">
-                  {([['date', 'Tarihe Göre'], ['price-asc', 'Fiyat: Düşük → Yüksek'], ['price-desc', 'Fiyat: Yüksek → Düşük']] as const).map(([val, label]) => (
+                  {SORT_OPTIONS.map(([val, label]) => (
                     <button key={val} onClick={() => { setSort(val); setSortOpen(false); }}
                       className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${sort === val ? 'text-teal-DEFAULT font-semibold' : 'text-fg'}`}>
                       {label}
