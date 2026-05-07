@@ -25,6 +25,7 @@ interface EventDetail {
   city: string;
   price: number;
   emoji: string;
+  image_url?: string;
   description?: string;
   total_capacity?: number;
   remaining_capacity?: number;
@@ -146,7 +147,9 @@ const EventDetailPage: React.FC = () => {
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-6 items-start mb-8 p-8 glass-strong rounded-3xl border border-white/5 relative overflow-hidden">
           <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-violet-500/20 to-purple-600/20 flex items-center justify-center text-4xl shadow-lg border border-white/10 z-10 flex-shrink-0">
-            {event.emoji}
+            {event.image_url ? (
+              <img src={event.image_url} alt={event.name} className="w-full h-full object-cover rounded-2xl" />
+            ) : event.emoji}
           </div>
           <div className="flex-1 z-10">
             <span className="text-[10px] font-bold tracking-widest uppercase text-teal-DEFAULT bg-teal-DEFAULT/10 px-3 py-1 rounded-full">{event.category}</span>
@@ -190,8 +193,12 @@ const EventDetailPage: React.FC = () => {
               </div>
             ) : (
               <div className="z-10 flex flex-col items-center justify-center p-8 h-full glass-strong">
+                {event.image_url ? (
+                  <img src={event.image_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover" />
+                ) : null}
+                {event.image_url && <div className="absolute inset-0 bg-black/45" />}
                 <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }} />
-                <div className="text-8xl drop-shadow-2xl mb-6 scale-125 z-10">{event.emoji}</div>
+                {!event.image_url && <div className="text-8xl drop-shadow-2xl mb-6 scale-125 z-10">{event.emoji}</div>}
                 <span className="text-lg font-black tracking-widest uppercase text-teal-DEFAULT opacity-80 z-10">{event.category}</span>
               </div>
             )}

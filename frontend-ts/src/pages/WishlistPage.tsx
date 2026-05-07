@@ -16,6 +16,7 @@ interface WishlistEvent {
   city: string;
   price: number;
   emoji: string;
+  image_url?: string;
   accent: string;
 }
 
@@ -162,8 +163,11 @@ const WishlistPage: React.FC = () => {
               style={{ animationDelay: `${i * 0.05}s` }}
             >
               <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
+                {event.image_url ? (
+                  <img src={event.image_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                ) : null}
                 <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }} />
-                {event.emoji}
+                {!event.image_url && event.emoji}
               </div>
 
               <div className="p-5 flex flex-col flex-1 gap-3">

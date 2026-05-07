@@ -19,6 +19,7 @@ interface Event {
   city: string;
   price: number;
   emoji: string;
+  image_url?: string;
   accent: string;
   remaining_capacity?: number;
   place_id?: string;
@@ -245,8 +246,11 @@ const EventsPage: React.FC = () => {
                 style={{ animationDelay: `${i * 0.05}s` }}>
                 {/* Cover */}
                 <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
+                  {event.image_url ? (
+                    <img src={event.image_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  ) : null}
                   <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, transparent 70%)' }}/>
-                  {event.emoji}
+                  {!event.image_url && event.emoji}
                   {soldOut && (
                     <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] flex items-center justify-center">
                       <span className="px-4 py-2 rounded-pill bg-red-500/20 border border-red-400/50 text-red-100 text-xs font-black uppercase tracking-[0.22em] shadow-lg">

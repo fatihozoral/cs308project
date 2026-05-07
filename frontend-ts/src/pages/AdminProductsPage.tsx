@@ -18,6 +18,7 @@ interface Event {
   name: string;
   category: string;
   emoji: string;
+  image_url?: string;
   price: number;
   remaining_capacity: number;
   total_capacity?: number;
@@ -58,7 +59,7 @@ const AdminProductsPage: React.FC = () => {
   const [form, setForm] = useState({
     name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
     remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '',
-    place_id: '', lat: null as number | null, lng: null as number | null
+    place_id: '', image_url: '', lat: null as number | null, lng: null as number | null
   });
 
   const placeInputRef = React.useRef<HTMLInputElement>(null);
@@ -155,7 +156,7 @@ const AdminProductsPage: React.FC = () => {
         remaining_capacity: capacity
       }, { headers: getAuthHeader() });
       setShowModal(false);
-      setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', lat: null, lng: null });
+      setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', image_url: '', lat: null, lng: null });
       fetchEvents();
     } catch { alert('Etkinlik eklenemedi.'); }
   };
@@ -264,7 +265,11 @@ const AdminProductsPage: React.FC = () => {
                       <tr key={event.id} className="hover:bg-white/5 transition-colors animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
-                            <span className="text-2xl">{event.emoji}</span>
+                            {event.image_url ? (
+                              <img src={event.image_url} alt={event.name} className="w-12 h-12 rounded-xl object-cover border border-white/10" />
+                            ) : (
+                              <span className="text-2xl">{event.emoji}</span>
+                            )}
                             <div>
                               <p className="font-semibold text-fg text-sm">{event.name}</p>
                               <p className="text-xs text-muted">{event.venue}, {event.city}</p>
@@ -429,6 +434,10 @@ const AdminProductsPage: React.FC = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Saat</label>
                   <input required type="time" value={form.event_time} onChange={e => setForm(p => ({ ...p, event_time: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Görsel URL</label>
+                  <input value={form.image_url} onChange={e => setForm(p => ({ ...p, image_url: e.target.value }))} placeholder="https://.../event-images/gorsel.jpg" className={inputCls} />
                 </div>
                 <div className="col-span-2 space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Emoji</label>

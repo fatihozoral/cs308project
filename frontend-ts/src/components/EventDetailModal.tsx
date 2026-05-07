@@ -30,6 +30,7 @@ interface Event {
   city: string;
   price: number;
   emoji: string;
+  image_url?: string;
   accent: string;
   remaining_capacity?: number;
 }
@@ -154,8 +155,12 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
       >
         {/* Cover */}
         <div className={`h-40 bg-gradient-to-br ${event.accent} flex items-center justify-center text-7xl relative rounded-t-3xl overflow-hidden`}>
+          {event.image_url ? (
+            <img src={event.image_url} alt={event.name} className="absolute inset-0 w-full h-full object-cover" />
+          ) : null}
+          {event.image_url && <div className="absolute inset-0 bg-black/25" />}
           <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.15) 0%, transparent 70%)' }}/>
-          {event.emoji}
+          {!event.image_url && event.emoji}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 w-8 h-8 glass rounded-full flex items-center justify-center text-fg hover:glass-strong transition-all"

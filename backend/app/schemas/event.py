@@ -18,6 +18,7 @@ class EventBase(BaseModel):
     place_id: Optional[str] = None
     description: Optional[str] = None
     featured_names: Optional[str] = None
+    image_url: Optional[str] = None
 
 class EventCreate(EventBase):
     pass
