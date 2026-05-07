@@ -40,7 +40,15 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
     for row in data:
         if search:
             s_lower = search.lower()
-            if s_lower not in row['name'].lower() and s_lower not in row['city'].lower():
+            searchable = " ".join([
+                str(row.get("name") or ""),
+                str(row.get("city") or ""),
+                str(row.get("venue") or ""),
+                str(row.get("description") or ""),
+                str(row.get("featured_names") or ""),
+                str(row.get("category") or "")
+            ]).lower()
+            if s_lower not in searchable:
                 continue
                 
         # Format date from YYYY-MM-DD to "DD Ayy YYYY"
@@ -62,6 +70,8 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
             "price": row["price"],
             "emoji": row["emoji"],
             "image_url": row.get("image_url"),
+            "description": row.get("description", ""),
+            "featured_names": row.get("featured_names", ""),
             "place_id": row.get("place_id"),
             "total_capacity": row.get("total_capacity"),
             "remaining_capacity": row.get("remaining_capacity"),
