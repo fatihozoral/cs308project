@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthHeader } from '@/services/authService';
 import { useAuth } from '@/context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -30,6 +31,7 @@ interface Event {
   price: number;
   emoji: string;
   accent: string;
+  remaining_capacity?: number;
 }
 
 interface Props {
@@ -57,12 +59,15 @@ const StarRating: React.FC<{ value: number; onChange?: (v: number) => void; read
 
 const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCart }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [comments, setComments] = useState<Comment[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
   const [content, setContent] = useState('');
   const [rating, setRating] = useState(5);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [wishlisted, setWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
   useEffect(() => {
     if (!event) return;
@@ -70,20 +75,37 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
     setSubmitted(false);
     setContent('');
     setRating(5);
-    axios.get(`${API_URL}/comments/event/${event.id}`, { headers: getAuthHeader() })
+    setWishlisted(false);
+    axios.get(`${API_URL}/comments/event/${event.id}`)
       .then(res => setComments(res.data))
       .catch(() => setComments([]))
       .finally(() => setLoadingComments(false));
   }, [event]);
+
+  useEffect(() => {
+    if (!event || !user) return;
+    axios.get(`${API_URL}/wishlist`, { headers: getAuthHeader() })
+      .then(res => {
+        const entries = Array.isArray(res.data) ? res.data : [];
+        setWishlisted(entries.some((item: any) => item.event_id === event.id));
+      })
+      .catch(() => setWishlisted(false));
+  }, [event, user]);
 
   if (!event) return null;
 
   const avgRating = comments.length
     ? (comments.reduce((s, c) => s + c.rating, 0) / comments.length).toFixed(1)
     : null;
+  const soldOut = (event.remaining_capacity ?? 1) <= 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      onClose();
+      navigate(`/login?redirect=${encodeURIComponent('/events')}`);
+      return;
+    }
     if (!content.trim()) return;
     setSubmitting(true);
     try {
@@ -99,6 +121,28 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
       alert('Yorum gönderilemedi.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleWishlistToggle = async () => {
+    if (!user) {
+      onClose();
+      navigate(`/login?redirect=${encodeURIComponent('/events')}`);
+      return;
+    }
+    setWishlistLoading(true);
+    try {
+      if (wishlisted) {
+        await axios.delete(`${API_URL}/wishlist/${event.id}`, { headers: getAuthHeader() });
+        setWishlisted(false);
+      } else {
+        await axios.post(`${API_URL}/wishlist/${event.id}`, {}, { headers: getAuthHeader() });
+        setWishlisted(true);
+      }
+    } catch {
+      alert('İstek listesi güncellenemedi.');
+    } finally {
+      setWishlistLoading(false);
     }
   };
 
@@ -141,17 +185,33 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
           </div>
 
           {/* Price + Add to cart */}
-          <div className="flex items-center justify-between bg-surface-2 border border-border rounded-2xl px-5 py-4">
+          <div className="flex items-center justify-between gap-4 bg-surface-2 border border-border rounded-2xl px-5 py-4">
             <div>
               <p className="text-xs text-muted font-medium mb-0.5">Bilet Fiyatı</p>
               <p className="text-3xl font-black text-fg">₺{event.price}</p>
+              {event.remaining_capacity !== undefined && (
+                <div className={`inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-pill border text-xs font-bold ${soldOut ? 'bg-red-500/10 border-red-400/40 text-red-300' : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/30 text-teal-DEFAULT'}`}>
+                  <span className={`w-2 h-2 rounded-full ${soldOut ? 'bg-red-400' : 'bg-teal-DEFAULT'}`} />
+                  {soldOut ? 'Biletler tükendi' : `${event.remaining_capacity} bilet kaldı`}
+                </div>
+              )}
             </div>
-            <button
-              onClick={() => { onAddToCart(event); onClose(); }}
-              className={`px-6 py-3 rounded-pill text-sm font-bold transition-all ${isInCart ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}
-            >
-              {isInCart ? '✓ Sepette' : 'Sepete Ekle'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={handleWishlistToggle}
+                disabled={wishlistLoading}
+                className={`px-5 py-3 rounded-pill text-sm font-bold transition-all disabled:opacity-60 ${wishlisted ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-ghost'}`}
+              >
+                {wishlistLoading ? 'Güncelleniyor...' : wishlisted ? 'Listeden Çıkar' : 'İstek Listesine Ekle'}
+              </button>
+              <button
+                onClick={() => { if (!soldOut) { onAddToCart(event); onClose(); } }}
+                disabled={soldOut}
+                className={`px-6 py-3 rounded-pill text-sm font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${soldOut ? 'glass border border-red-400/30 text-red-300' : isInCart ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}
+              >
+                {soldOut ? 'Tükendi' : isInCart ? 'Sepette' : 'Sepete Ekle'}
+              </button>
+            </div>
           </div>
 
           {/* Comments */}
@@ -194,6 +254,7 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
                 <p className="text-xs text-muted mt-1">Onaylandıktan sonra görünecek.</p>
               </div>
             ) : (
+              user ? (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest mb-2 block">Puanın</label>
@@ -219,6 +280,17 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
                   {submitting ? 'Gönderiliyor...' : 'Yorum Gönder'}
                 </button>
               </form>
+              ) : (
+                <div className="glass rounded-2xl p-5 text-center">
+                  <p className="text-sm text-muted mb-4">Yorum yapmak için giriş yapman gerekiyor.</p>
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); navigate(`/login?redirect=${encodeURIComponent('/events')}`); }}
+                    className="btn-gradient px-6 py-3 text-sm font-bold">
+                    Giriş Yap
+                  </button>
+                </div>
+              )
             )}
           </div>
         </div>

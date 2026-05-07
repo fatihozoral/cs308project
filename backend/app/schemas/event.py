@@ -15,6 +15,9 @@ class EventBase(BaseModel):
     total_capacity: Optional[int] = None
     remaining_capacity: Optional[int] = None
     ticket_categories: Optional[list] = None
+    place_id: Optional[str] = None
+    description: Optional[str] = None
+    featured_names: Optional[str] = None
 
 class EventCreate(EventBase):
     pass

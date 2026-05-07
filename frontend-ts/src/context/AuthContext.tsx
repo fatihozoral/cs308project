@@ -27,23 +27,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // On mount, check if there's a token and restore user state
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-
-    if (token && storedUser) {
-      try {
-        const userData: User = JSON.parse(storedUser);
-        setUser(userData);
-        setAuthToken(token);
-      } catch (error) {
-        console.error('Failed to parse stored user data:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
-    }
-
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('cart');
+    localStorage.removeItem('tickets');
+    localStorage.removeItem('cancelledOrders');
+    setAuthToken(null);
     setLoading(false);
   }, []);
 

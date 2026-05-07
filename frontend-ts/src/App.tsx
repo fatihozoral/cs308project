@@ -17,6 +17,7 @@ import AdminSalesPage from '@/pages/AdminSalesPage';
 import AdminProductsPage from '@/pages/AdminProductsPage';
 import WishlistPage from '@/pages/WishlistPage';
 import ChatBot from '@/components/ChatBot';
+import type { UserRole } from '@/types/auth.types';
 
 /**
  * Protected Route Component
@@ -106,6 +107,34 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
+const RoleProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles: UserRole[] }> = ({ children, allowedRoles }) => {
+  const { user, loading, getRedirectPath } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="mt-4 text-gray-600">Yükleniyor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!allowedRoles.includes(user.role)) {
+    return <Navigate to={getRedirectPath(user.role)} replace />;
+  }
+
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <Router>
@@ -133,33 +162,25 @@ function App() {
           <Route
             path="/"
             element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
+              <HomePage />
             }
           />
           <Route
             path="/events"
             element={
-              <ProtectedRoute>
-                <EventsPage />
-              </ProtectedRoute>
+              <EventsPage />
             }
           />
           <Route
             path="/events/:eventId"
             element={
-              <ProtectedRoute>
-                <EventDetailPage />
-              </ProtectedRoute>
+              <EventDetailPage />
             }
           />
           <Route
             path="/cart"
             element={
-              <ProtectedRoute>
-                <CartPage />
-              </ProtectedRoute>
+              <CartPage />
             }
           />
           <Route
@@ -181,17 +202,17 @@ function App() {
           <Route
             path="/admin/sales"
             element={
-              <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={['sales_manager']}>
                 <AdminSalesPage />
-              </ProtectedRoute>
+              </RoleProtectedRoute>
             }
           />
           <Route
             path="/admin/products"
             element={
-              <ProtectedRoute>
+              <RoleProtectedRoute allowedRoles={['product_manager']}>
                 <AdminProductsPage />
-              </ProtectedRoute>
+              </RoleProtectedRoute>
             }
           />
 

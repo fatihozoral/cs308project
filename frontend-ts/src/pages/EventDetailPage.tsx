@@ -81,8 +81,13 @@ const EventDetailPage: React.FC = () => {
       catName = selectedCategory.name;
     }
 
+    if (rem !== undefined && rem <= 0) {
+      alert('Bu etkinlik için biletler tükendi.');
+      return;
+    }
+
     if (rem !== undefined && quantity > rem) {
-      alert(`Bu kategori/etkinlik için sacede ${rem} bilet kaldı! Lütfen adedi düşürün.`);
+      alert(`Bu kategori/etkinlik için sadece ${rem} bilet kaldı! Lütfen adedi düşürün.`);
       return;
     }
 
@@ -122,8 +127,16 @@ const EventDetailPage: React.FC = () => {
   if (!event) return <div className="min-h-screen bg-mesh pt-20"><Navbar cartCount={cartCount} /><div className="flex justify-center items-center h-[50vh]">Etkinlik bulunamadı.</div></div>;
 
   const hasCategories = Boolean(event.ticket_categories && event.ticket_categories.length > 0);
-  const isSport = event.category === 'Spor';
   const isInteractive = (event.category === 'Spor' || event.category === 'Konser') && hasCategories;
+  const totalRemaining = event.remaining_capacity ?? event.ticket_categories?.reduce((sum, cat) => sum + cat.remaining, 0);
+  const soldOut = totalRemaining !== undefined && totalRemaining <= 0;
+  const selectedRemaining = hasCategories ? selectedCategory?.remaining : totalRemaining;
+  const addDisabled = soldOut || (hasCategories && !selectedCategory) || (selectedRemaining !== undefined && selectedRemaining <= 0);
+  const availabilityClass = soldOut
+    ? 'bg-red-500/10 border-red-400/40 text-red-300'
+    : totalRemaining !== undefined && totalRemaining <= 10
+      ? 'bg-amber-500/10 border-amber-400/40 text-amber-300'
+      : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/30 text-teal-DEFAULT';
 
   return (
     <div className="min-h-screen bg-mesh pt-20">
@@ -141,13 +154,17 @@ const EventDetailPage: React.FC = () => {
             <div className="flex flex-wrap gap-4 text-muted text-sm mt-3">
               <div className="flex items-center gap-2"><span>📅</span> {event.date} · {event.time}</div>
               <div className="flex items-center gap-2"><span>📍</span> {event.venue}, {event.city}</div>
-              {event.remaining_capacity !== undefined && (
-                <div className="flex items-center gap-2 font-semibold text-teal-DEFAULT bg-teal-DEFAULT/10 px-3 py-1 rounded-full">
-                  {event.remaining_capacity > 0 ? `Toplam Kalan: ${event.remaining_capacity}` : 'Tamamen Tükendi'}
-                </div>
-              )}
             </div>
-          </div>
+            {totalRemaining !== undefined && (
+              <div className={`mt-5 inline-flex items-center gap-3 rounded-2xl border px-4 py-3 ${availabilityClass}`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${soldOut ? 'bg-red-400' : totalRemaining <= 10 ? 'bg-amber-300' : 'bg-teal-DEFAULT'}`} />
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Bilet Durumu</p>
+                  <p className="text-sm font-black">{soldOut ? 'Tükendi' : `${totalRemaining} bilet kaldı`}</p>
+                </div>
+              </div>
+            )}
+            </div>
         </div>
 
         {/* Content Layout */}
@@ -237,10 +254,15 @@ const EventDetailPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="mb-8 flex justify-between items-center glass p-6 rounded-2xl border border-white/5">
+                <div className={`mb-8 flex justify-between items-center glass p-6 rounded-2xl border ${soldOut ? 'border-red-400/25' : 'border-white/5'}`}>
                   <div>
                     <div className="font-bold text-fg text-xl">Standart Bilet</div>
-                    <p className="text-[10px] text-muted mt-1 uppercase tracking-widest font-bold">Kalan: {event.remaining_capacity}</p>
+                    {totalRemaining !== undefined && (
+                      <div className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-pill border text-xs font-bold ${availabilityClass}`}>
+                        <span className={`w-2 h-2 rounded-full ${soldOut ? 'bg-red-400' : totalRemaining <= 10 ? 'bg-amber-300' : 'bg-teal-DEFAULT'}`} />
+                        {soldOut ? 'Tükendi' : `${totalRemaining} bilet kaldı`}
+                      </div>
+                    )}
                   </div>
                   <div className="font-black text-teal-DEFAULT text-3xl">₺{event.price}</div>
                 </div>
@@ -254,16 +276,16 @@ const EventDetailPage: React.FC = () => {
                 <div className="flex items-center justify-between glass px-4 py-2 rounded-2xl w-full sm:max-w-[160px] border border-white/5">
                   <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))} className="text-2xl font-light hover:text-teal-DEFAULT transition-colors w-8 h-8 flex items-center justify-center">−</button>
                   <span className="font-black text-xl text-fg mx-2">{quantity}</span>
-                  <button type="button" onClick={() => setQuantity(q => q + 1)} className="text-2xl font-light hover:text-teal-DEFAULT transition-colors w-8 h-8 flex items-center justify-center">+</button>
+                  <button type="button" onClick={() => setQuantity(q => selectedRemaining !== undefined ? Math.min(selectedRemaining, q + 1) : q + 1)} disabled={selectedRemaining !== undefined && quantity >= selectedRemaining} className="text-2xl font-light hover:text-teal-DEFAULT transition-colors w-8 h-8 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed">+</button>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={handleAddToCart}
-                disabled={hasCategories && !selectedCategory}
-                className="btn-gradient px-10 py-4 h-[60px] rounded-2xl font-bold shadow-xl hover:shadow-teal-DEFAULT/20 hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed w-full sm:w-auto text-[15px]"
+                disabled={addDisabled}
+                className={`px-10 py-4 h-[60px] rounded-2xl font-bold shadow-xl hover:scale-[1.02] transition-all disabled:opacity-60 disabled:hover:scale-100 disabled:cursor-not-allowed w-full sm:w-auto text-[15px] ${soldOut ? 'glass border border-red-400/30 text-red-300' : 'btn-gradient hover:shadow-teal-DEFAULT/20'}`}
               >
-                Sepete Ekle ({hasCategories && selectedCategory ? `₺${selectedCategory.price * quantity}` : `₺${event.price * quantity}`})
+                {soldOut ? 'Tükendi' : `Sepete Ekle (${hasCategories && selectedCategory ? `₺${selectedCategory.price * quantity}` : `₺${event.price * quantity}`})`}
               </button>
             </div>
 

@@ -45,5 +45,6 @@ export interface AuthContextType {
 }
 
 export interface ApiError {
-  error: string;
+  error?: string;
+  detail?: string;
 }

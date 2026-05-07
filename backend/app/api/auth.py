@@ -67,4 +67,5 @@ def login_user(user: UserLogin):
             }
         }
     except Exception as e:
-        raise HTTPException(status_code=401, detail="Geçersiz e-posta veya şifre.")
+        message = str(e) or "Geçersiz e-posta veya şifre."
+        raise HTTPException(status_code=401, detail=f"Login failed: {message}")

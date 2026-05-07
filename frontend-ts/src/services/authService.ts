@@ -8,7 +8,8 @@
 import axios, { AxiosError } from 'axios';
 import type { LoginCredentials, RegisterData, LoginResponse, RegisterResponse, ApiError } from '@/types/auth.types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/auth';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = API_BASE.endsWith('/auth') ? API_BASE : `${API_BASE}/auth`;
 
 /**
  * Register a new customer account
@@ -19,9 +20,8 @@ export async function register(userData: RegisterData): Promise<RegisterResponse
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<ApiError>;
-    if (axiosError.response?.data?.error) {
-      throw new Error(axiosError.response.data.error);
-    }
+    const message = axiosError.response?.data?.detail || axiosError.response?.data?.error;
+    if (message) throw new Error(message);
     throw new Error('Sunucu ile bağlantı kurulamadı.');
   }
 }
@@ -35,9 +35,8 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<ApiError>;
-    if (axiosError.response?.data?.error) {
-      throw new Error(axiosError.response.data.error);
-    }
+    const message = axiosError.response?.data?.detail || axiosError.response?.data?.error;
+    if (message) throw new Error(message);
     throw new Error('Sunucu ile bağlantı kurulamadı.');
   }
 }

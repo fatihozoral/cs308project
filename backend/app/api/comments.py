@@ -9,7 +9,10 @@ async def get_current_user(authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Geçersiz format")
     token = authorization.replace("Bearer ", "")
-    response = supabase.auth.get_user(token)
+    try:
+        response = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Geçersiz veya süresi dolmuş oturum")
     if not response.user:
         raise HTTPException(status_code=401, detail="Yetkisiz erişim")
     return response.user
@@ -32,7 +35,7 @@ async def get_pending_comments(user=Depends(get_current_user)):
     return res.data or []
 
 @router.get("/comments/event/{event_id}")
-async def get_event_comments(event_id: int, user=Depends(get_current_user)):
+async def get_event_comments(event_id: int):
     res = supabase.table("comments").select("*").eq("event_id", event_id).eq("status", "approved").order("created_at", desc=True).execute()
     return res.data or []
 
