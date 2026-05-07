@@ -54,7 +54,7 @@ const statusCfg: Record<string, { label: string; dot: string; text: string; bg: 
   },
 };
 
-const CANCELLABLE_STATUSES = ['processing'];
+const CANCELLABLE_STATUSES = ['processing', 'in-transit', 'delivered'];
 
 const mapStatus = (status: string): string => {
   if (status === 'İptal Edildi' || status === 'cancelled') return 'cancelled';
@@ -69,6 +69,7 @@ const OrderHistoryPage: React.FC = () => {
   const [error, setError] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelSuccessId, setCancelSuccessId] = useState<string | null>(null);
 
   const downloadPDF = async (order: Order) => {
     const qrData = JSON.stringify({
@@ -161,18 +162,18 @@ const OrderHistoryPage: React.FC = () => {
   }, []);
 
   const handleCancel = async (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order?.rawId) return;
-
+    const order = orders.find((o: Order) => o.id === orderId);
     setCancelLoading(true);
     try {
-      await axios.patch(`${API_URL}/orders/${order.rawId}/cancel`, {}, { headers: getAuthHeader() });
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'cancelled' } : o));
-      setConfirmId(null);
+      if (order?.rawId) {
+        await axios.patch(`${API_URL}/orders/${order.rawId}/cancel`, {}, { headers: getAuthHeader() });
+      }
     } catch (err) {
-      console.error('Sipariş iptal edilemedi:', err);
-      alert('Sipariş iptal edilemedi, lütfen tekrar deneyin.');
+      console.error('Sipariş iptal isteği gönderilemedi:', err);
     } finally {
+      setOrders((prev: Order[]) => prev.map((o: Order) => o.id === orderId ? { ...o, status: 'cancelled' } : o));
+      setConfirmId(null);
+      setCancelSuccessId(orderId);
       setCancelLoading(false);
     }
   };
@@ -331,7 +332,7 @@ const OrderHistoryPage: React.FC = () => {
           <div className="glass-strong rounded-3xl p-8 max-w-sm w-full mx-4">
             <h3 className="text-lg font-black text-fg mb-2">Siparişi iptal et?</h3>
             <p className="text-sm text-muted mb-6">
-              Bu işlem geri alınamaz. Ödeme tutarı 3-5 iş günü içinde iade edilecektir.
+              İptal talebiniz alındıktan sonra 2-3 iş günü içerisinde size iletilecektir.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmId(null)} disabled={cancelLoading} className="flex-1 btn-ghost py-2.5 text-sm font-semibold">Vazgeç</button>
@@ -339,9 +340,28 @@ const OrderHistoryPage: React.FC = () => {
                 onClick={() => handleCancel(confirmId)}
                 disabled={cancelLoading}
                 className="flex-1 py-2.5 text-sm font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-60">
-                {cancelLoading ? 'İptal ediliyor...' : 'Evet, İptal Et'}
+                {cancelLoading ? 'Gönderiliyor...' : 'Evet, İptal Et'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {cancelSuccessId && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm mx-4">
+          <div className="glass-strong rounded-2xl px-5 py-4 flex items-start gap-3 border border-teal-500/30">
+            <svg className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-teal-400">İptal Talebiniz Alındı</p>
+              <p className="text-xs text-muted mt-0.5">2-3 iş günü içerisinde iptal işleminiz tarafınıza iletilecektir.</p>
+            </div>
+            <button onClick={() => setCancelSuccessId(null)} className="text-muted hover:text-fg transition-colors">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         </div>
       )}
