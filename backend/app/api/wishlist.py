@@ -1,13 +1,19 @@
 from fastapi import APIRouter, Header, HTTPException, Depends
+from typing import Optional
 from app.core.config import supabase
 
 router = APIRouter()
 
-async def get_current_user(authorization: str = Header(...)):
+async def get_current_user(authorization: Optional[str] = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Giriş yapmanız gerekiyor")
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Geçersiz format")
     token = authorization.replace("Bearer ", "")
-    response = supabase.auth.get_user(token)
+    try:
+        response = supabase.auth.get_user(token)
+    except Exception:
+        raise HTTPException(status_code=401, detail="Geçersiz veya süresi dolmuş oturum")
     if not response.user:
         raise HTTPException(status_code=401, detail="Yetkisiz erişim")
     return response.user

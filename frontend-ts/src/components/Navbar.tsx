@@ -22,8 +22,10 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
 
   const links = [
     { to: '/events', label: 'Etkinlikler' },
-    { to: '/wishlist', label: '🤍 İstek Listesi' },
-    { to: '/orders', label: 'Siparişlerim' },
+    ...(user ? [
+      { to: '/wishlist', label: 'İstek Listesi' },
+      { to: '/orders', label: 'Siparişlerim' },
+    ] : []),
   ];
 
   return (
@@ -61,11 +63,19 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
 
           {/* Right */}
           <div className="flex items-center gap-3">
-            <span className="hidden sm:block text-xs text-muted">{user?.name?.split(' ')[0]}</span>
-            <button onClick={handleLogout}
-              className="btn-ghost px-4 py-1.5 text-xs font-medium">
-              Çıkış
-            </button>
+            {user ? (
+              <>
+                <span className="hidden sm:block text-xs text-muted">{user.name?.split(' ')[0]}</span>
+                <button onClick={handleLogout}
+                  className="btn-ghost px-4 py-1.5 text-xs font-medium">
+                  Çıkış
+                </button>
+              </>
+            ) : (
+              <Link to="/login" className="btn-ghost px-4 py-1.5 text-xs font-medium">
+                Giriş Yap
+              </Link>
+            )}
           </div>
         </div>
       </div>

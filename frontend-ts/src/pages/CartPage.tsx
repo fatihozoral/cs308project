@@ -33,49 +33,22 @@ const CartPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) {
+      navigate(`/login?redirect=${encodeURIComponent('/cart')}`);
+      return;
+    }
     setLoading(true);
     try {
-      const orderId = `ORD-${Date.now()}`;
-
-      // Generate a ticket entry per cart item
-      const tickets = cart.map(item => ({
-        ticketId: crypto.randomUUID(),
-        orderId,
-        eventName: item.name,
-        date: item.date,
+      const items = cart.map(item => ({
+        event_id: item.id,
+        event_name: item.name,
+        event_date: item.date,
         venue: item.venue,
         quantity: item.quantity,
-        totalPrice: item.price * item.quantity,
-        token: null as string | null,
+        price: item.price,
+        category: item.category
       }));
-
-      // Save locally first (fallback if backend is offline)
-      const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
-      localStorage.setItem('tickets', JSON.stringify([...tickets, ...existing]));
-
-      // Try to persist to backend; ignore errors (backend may be offline)
-      try {
-        const items = cart.map(item => ({
-          event_id: item.id,
-          event_name: item.name,
-          event_date: item.date,
-          venue: item.venue,
-          quantity: item.quantity,
-          price: item.price
-        }));
-        const res = await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
-        const backendTokens: string[] = res.data.tokens || [];
-
-        // Overwrite tickets with real backend tokens
-        const ticketsWithTokens = tickets.map((t, i) => ({
-          ...t,
-          token: backendTokens[i] ?? null,
-        }));
-        const existing = JSON.parse(localStorage.getItem('tickets') || '[]');
-        localStorage.setItem('tickets', JSON.stringify([...ticketsWithTokens, ...existing]));
-      } catch {
-        // backend offline — tickets already saved locally without tokens
-      }
+      await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
 
       localStorage.removeItem('cart');
       setCart([]);
@@ -181,6 +154,7 @@ const CartPage: React.FC = () => {
             </div>
 
             {/* Checkout */}
+            {user ? (
             <form onSubmit={handleSubmit} className="glass-strong rounded-3xl p-6 space-y-4">
               <h2 className="font-bold text-fg">Ödeme Bilgileri</h2>
 
@@ -215,6 +189,20 @@ const CartPage: React.FC = () => {
 
               <p className="text-xs text-center text-muted">🔒 256-bit SSL ile güvenli ödeme</p>
             </form>
+            ) : (
+              <div className="glass-strong rounded-3xl p-6 space-y-4">
+                <h2 className="font-bold text-fg">Ödemeye Devam Et</h2>
+                <p className="text-sm text-muted leading-relaxed">
+                  Sepetini giriş yapmadan hazırlayabilirsin. Ödeme ve sipariş oluşturma aşamasında hesabına giriş yapman gerekiyor.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/login?redirect=${encodeURIComponent('/cart')}`)}
+                  className="btn-gradient w-full px-6 py-3.5 text-sm font-bold">
+                  Giriş Yap ve Checkout'a Devam Et
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

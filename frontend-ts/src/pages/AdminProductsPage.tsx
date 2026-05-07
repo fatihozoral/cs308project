@@ -19,7 +19,8 @@ interface Event {
   category: string;
   emoji: string;
   price: number;
-  stock_quantity: number;
+  remaining_capacity: number;
+  total_capacity?: number;
   is_active: boolean;
   venue: string;
   city: string;
@@ -56,7 +57,7 @@ const AdminProductsPage: React.FC = () => {
 
   const [form, setForm] = useState({
     name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
-    stock_quantity: '', venue: '', city: '', event_date: '', event_time: '',
+    remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '',
     place_id: '', lat: null as number | null, lng: null as number | null
   });
 
@@ -129,13 +130,10 @@ const AdminProductsPage: React.FC = () => {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/events/all`, { headers: getAuthHeader() });
+      const res = await axios.get(`${API_URL}/admin/events`, { headers: getAuthHeader() });
       setEvents(res.data);
     } catch {
-      try {
-        const res = await axios.get(`${API_URL}/events`, { headers: getAuthHeader() });
-        setEvents(res.data);
-      } catch { setEvents([]); }
+      setEvents([]);
     } finally { setLoading(false); }
   };
 
@@ -149,20 +147,22 @@ const AdminProductsPage: React.FC = () => {
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_URL}/events`, {
+      const capacity = Number(form.remaining_capacity);
+      await axios.post(`${API_URL}/admin/events`, {
         ...form,
         price: Number(form.price),
-        stock_quantity: Number(form.stock_quantity)
+        total_capacity: capacity,
+        remaining_capacity: capacity
       }, { headers: getAuthHeader() });
       setShowModal(false);
-      setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', stock_quantity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', lat: null, lng: null });
+      setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', lat: null, lng: null });
       fetchEvents();
     } catch { alert('Etkinlik eklenemedi.'); }
   };
 
   const handleDelete = async (id: number) => {
     try {
-      await axios.delete(`${API_URL}/events/${id}`, { headers: getAuthHeader() });
+      await axios.delete(`${API_URL}/admin/events/${id}`, { headers: getAuthHeader() });
       setEvents(prev => prev.filter(e => e.id !== id));
       setDeleteConfirmId(null);
     } catch { alert('Silinemedi.'); }
@@ -171,8 +171,8 @@ const AdminProductsPage: React.FC = () => {
   const handleStockSave = async (id: number) => {
     if (!editingStock) return;
     try {
-      await axios.patch(`${API_URL}/events/${id}`, { stock_quantity: Number(editingStock.value) }, { headers: getAuthHeader() });
-      setEvents(prev => prev.map(e => e.id === id ? { ...e, stock_quantity: Number(editingStock.value) } : e));
+      await axios.patch(`${API_URL}/admin/events/${id}`, { remaining_capacity: Number(editingStock.value) }, { headers: getAuthHeader() });
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, remaining_capacity: Number(editingStock.value) } : e));
       setEditingStock(null);
     } catch { alert('Stok güncellenemedi.'); }
   };
@@ -304,9 +304,9 @@ const AdminProductsPage: React.FC = () => {
                               <button onClick={() => handleStockSave(event.id)} className="text-teal-DEFAULT text-xs font-bold">✓</button>
                             </div>
                           ) : (
-                            <button onClick={() => setEditingStock({ id: event.id, value: String(event.stock_quantity ?? 0) })}
+                            <button onClick={() => setEditingStock({ id: event.id, value: String(event.remaining_capacity ?? 0) })}
                               className="text-sm text-fg hover:text-teal-DEFAULT transition-colors font-medium">
-                              {event.stock_quantity ?? 0}
+                              {event.remaining_capacity ?? 0}
                               <span className="text-xs text-muted ml-1">✎</span>
                             </button>
                           )}
@@ -412,7 +412,7 @@ const AdminProductsPage: React.FC = () => {
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Stok</label>
-                  <input required type="number" value={form.stock_quantity} onChange={e => setForm(p => ({ ...p, stock_quantity: e.target.value }))} placeholder="100" className={inputCls} />
+                  <input required type="number" value={form.remaining_capacity} onChange={e => setForm(p => ({ ...p, remaining_capacity: e.target.value }))} placeholder="100" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Mekan</label>

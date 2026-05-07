@@ -1,26 +1,40 @@
 import React, { useState, FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import type { LoginCredentials } from '@/types/auth.types';
+import { login as loginAPI } from '@/services/authService';
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState<LoginCredentials>({ email: '', password: '' });
   const [serverError, setServerError] = useState('');
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const location = useLocation();
+  const redirectTo = new URLSearchParams(location.search).get('redirect');
+  const { login, getRedirectPath } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     if (serverError) setServerError('');
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // TEMPORARY: Skip auth, set fake user and navigate — remove when Supabase is configured
-    login('fake-token', { id: '1', name: 'Demo Kullanıcı', email: formData.email || 'demo@tickethub.com', role: 'customer' as const });
-    navigate('/');
+    if (!formData.email || !formData.password) {
+      setServerError('Lütfen e-posta ve şifrenizi girin.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await loginAPI(formData);
+      login(response.token, response.user);
+      navigate(redirectTo || getRedirectPath(response.user.role), { replace: true });
+    } catch (error: any) {
+      setServerError(error.message || 'Giriş yapılamadı.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

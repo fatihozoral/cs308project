@@ -12,6 +12,10 @@ import { getAuthHeader } from '@/services/authService';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
+const CHART_WIDTH = 900;
+const CHART_HEIGHT = 260;
+const CHART_PAD = { top: 28, right: 28, bottom: 46, left: 70 };
+
 interface OrderItem {
   id: number;
   name: string;
@@ -51,13 +55,8 @@ const AdminSalesPage: React.FC = () => {
       const res = await axios.get(`${API_URL}/orders/all`, { headers: getAuthHeader() });
       setOrders(res.data);
     } catch (e) {
-      // fallback: fetch own orders if /all not available yet
-      try {
-        const res = await axios.get(`${API_URL}/orders`, { headers: getAuthHeader() });
-        setOrders(res.data);
-      } catch {
-        setOrders([]);
-      }
+      console.error('Satış siparişleri yüklenemedi:', e);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -79,29 +78,57 @@ const AdminSalesPage: React.FC = () => {
     return true;
   });
 
-  const totalRevenue = filtered.reduce((s, o) => s + Number(o.total), 0);
-  const completedOrders = filtered.filter(o => o.status === 'Tamamlandı');
-  const cancelledOrders = filtered.filter(o => o.status === 'İptal Edildi');
-  const completedRevenue = completedOrders.reduce((s, o) => s + Number(o.total), 0);
+  const normalizeStatus = (status: string): 'processing' | 'in-transit' | 'delivered' | 'cancelled' => {
+    if (status === 'İptal Edildi' || status === 'cancelled') return 'cancelled';
+    if (status === 'Yolda' || status === 'in-transit') return 'in-transit';
+    if (status === 'Tamamlandı' || status === 'delivered') return 'delivered';
+    return 'processing';
+  };
+
+  const revenueOrders = filtered.filter(o => normalizeStatus(o.status) !== 'cancelled');
+  const completedOrders = filtered.filter(o => normalizeStatus(o.status) === 'delivered');
+  const cancelledOrders = filtered.filter(o => normalizeStatus(o.status) === 'cancelled');
+  const completedRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
 
   // Build chart data — group by date
   const revenueByDate: Record<string, number> = {};
-  filtered.forEach(o => {
+  revenueOrders.forEach(o => {
     const key = o.date;
     revenueByDate[key] = (revenueByDate[key] || 0) + Number(o.total);
   });
   const chartData = Object.entries(revenueByDate)
     .sort(([a], [b]) => parseDate(a).getTime() - parseDate(b).getTime())
-    .slice(-14); // last 14 days
+    .slice(-14)
+    .map(([date, revenue]) => ({
+      date,
+      revenue,
+      label: date.includes('.') ? date.slice(0, 5) : date.slice(5),
+    }));
 
-  const maxVal = Math.max(...chartData.map(([, v]) => v), 1);
+  const maxVal = Math.max(...chartData.map(point => point.revenue), 1);
+  const plotWidth = CHART_WIDTH - CHART_PAD.left - CHART_PAD.right;
+  const plotHeight = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
+  const getX = (index: number) => CHART_PAD.left + (chartData.length === 1 ? plotWidth / 2 : (index / (chartData.length - 1)) * plotWidth);
+  const getY = (value: number) => CHART_PAD.top + plotHeight - (value / maxVal) * plotHeight;
+  const linePoints = chartData.map((point, index) => `${getX(index)},${getY(point.revenue)}`).join(' ');
+  const areaPath = chartData.length > 0
+    ? `M ${getX(0)} ${CHART_PAD.top + plotHeight} L ${chartData.map((point, index) => `${getX(index)} ${getY(point.revenue)}`).join(' L ')} L ${getX(chartData.length - 1)} ${CHART_PAD.top + plotHeight} Z`
+    : '';
+  const yTicks = [1, 0.75, 0.5, 0.25, 0].map(ratio => ({
+    y: CHART_PAD.top + plotHeight * (1 - ratio),
+    value: Math.round(maxVal * ratio),
+  }));
 
   const inputCls = 'px-4 py-2.5 rounded-xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all';
 
   const statusCfg: Record<string, { dot: string; text: string; bg: string }> = {
     'Tamamlandı': { dot: 'bg-teal-DEFAULT', text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
+    'delivered': { dot: 'bg-teal-DEFAULT', text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
     'İptal Edildi': { dot: 'bg-red-400', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
+    'cancelled': { dot: 'bg-red-400', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
     'Beklemede':   { dot: 'bg-amber-400', text: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+    'processing': { dot: 'bg-amber-400', text: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+    'in-transit': { dot: 'bg-blue-400', text: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
   };
 
   return (
@@ -174,22 +201,101 @@ const AdminSalesPage: React.FC = () => {
         {/* Revenue chart */}
         {chartData.length > 0 && (
           <div className="glass-strong rounded-3xl p-6 animate-fade-up">
-            <h2 className="font-bold text-fg mb-6">Günlük Gelir Grafiği</h2>
-            <div className="flex items-end gap-2 h-40">
-              {chartData.map(([date, val]) => (
-                <div key={date} className="flex-1 flex flex-col items-center gap-1 group">
-                  <span className="text-[10px] text-teal-DEFAULT font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                    ₺{val.toLocaleString('tr-TR')}
-                  </span>
-                  <div
-                    className="w-full rounded-t-lg bg-gradient-to-t from-teal-DEFAULT/60 to-teal-DEFAULT transition-all group-hover:from-teal-DEFAULT/80 group-hover:to-teal-DEFAULT"
-                    style={{ height: `${Math.max((val / maxVal) * 100, 4)}%` }}
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h2 className="font-bold text-fg">Günlük Gelir Grafiği</h2>
+                <p className="text-xs text-muted mt-1">İptal edilmeyen siparişlerden günlük gelir dağılımı</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Tepe Gün</p>
+                <p className="text-sm font-black text-teal-DEFAULT">₺{maxVal.toLocaleString('tr-TR')}</p>
+              </div>
+            </div>
+
+            <div className="w-full overflow-x-auto">
+              <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="min-w-[760px] w-full h-[300px]" role="img" aria-label="Günlük gelir grafiği">
+                <defs>
+                  <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.36" />
+                    <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.02" />
+                  </linearGradient>
+                  <linearGradient id="revenueLine" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="rgb(94, 234, 212)" />
+                    <stop offset="100%" stopColor="rgb(250, 204, 21)" />
+                  </linearGradient>
+                </defs>
+
+                {yTicks.map(tick => (
+                  <g key={tick.y}>
+                    <line
+                      x1={CHART_PAD.left}
+                      x2={CHART_WIDTH - CHART_PAD.right}
+                      y1={tick.y}
+                      y2={tick.y}
+                      stroke="rgba(148, 163, 184, 0.14)"
+                      strokeWidth="1"
+                    />
+                    <text x={CHART_PAD.left - 12} y={tick.y + 4} textAnchor="end" className="fill-slate-500 text-[11px]">
+                      ₺{tick.value.toLocaleString('tr-TR')}
+                    </text>
+                  </g>
+                ))}
+
+                <line
+                  x1={CHART_PAD.left}
+                  x2={CHART_PAD.left}
+                  y1={CHART_PAD.top}
+                  y2={CHART_PAD.top + plotHeight}
+                  stroke="rgba(148, 163, 184, 0.2)"
+                />
+                <line
+                  x1={CHART_PAD.left}
+                  x2={CHART_WIDTH - CHART_PAD.right}
+                  y1={CHART_PAD.top + plotHeight}
+                  y2={CHART_PAD.top + plotHeight}
+                  stroke="rgba(148, 163, 184, 0.2)"
+                />
+
+                <path d={areaPath} fill="url(#revenueArea)" />
+                {chartData.length > 1 ? (
+                  <polyline points={linePoints} fill="none" stroke="url(#revenueLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                ) : (
+                  <line
+                    x1={CHART_PAD.left + plotWidth * 0.35}
+                    x2={CHART_PAD.left + plotWidth * 0.65}
+                    y1={getY(chartData[0].revenue)}
+                    y2={getY(chartData[0].revenue)}
+                    stroke="url(#revenueLine)"
+                    strokeWidth="4"
+                    strokeLinecap="round"
                   />
-                  <span className="text-[9px] text-muted rotate-45 origin-left mt-1 w-8 truncate">
-                    {date.slice(0, 5)}
-                  </span>
-                </div>
-              ))}
+                )}
+
+                {chartData.map((point, index) => {
+                  const x = getX(index);
+                  const y = getY(point.revenue);
+                  return (
+                    <g key={point.date}>
+                      <line
+                        x1={x}
+                        x2={x}
+                        y1={y}
+                        y2={CHART_PAD.top + plotHeight}
+                        stroke="rgba(45, 212, 191, 0.16)"
+                        strokeDasharray="4 5"
+                      />
+                      <circle cx={x} cy={y} r="7" fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth="3" />
+                      <circle cx={x} cy={y} r="3" fill="rgb(250, 204, 21)" />
+                      <text x={x} y={y - 14} textAnchor="middle" className="fill-teal-300 text-[12px] font-bold">
+                        ₺{point.revenue.toLocaleString('tr-TR')}
+                      </text>
+                      <text x={x} y={CHART_HEIGHT - 16} textAnchor="middle" className="fill-slate-400 text-[11px]">
+                        {point.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
             </div>
           </div>
         )}
