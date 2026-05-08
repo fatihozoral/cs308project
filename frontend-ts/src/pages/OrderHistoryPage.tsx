@@ -54,7 +54,7 @@ const statusCfg: Record<string, { label: string; dot: string; text: string; bg: 
   },
 };
 
-const CANCELLABLE_STATUSES = ['processing', 'in-transit', 'delivered'];
+const CANCELLABLE_STATUSES = ['processing'];
 
 const mapStatus = (status: string): string => {
   if (status === 'İptal Edildi' || status === 'cancelled') return 'cancelled';
