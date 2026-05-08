@@ -27,6 +27,7 @@ interface OrderItem {
 
 interface Order {
   id: string;
+  raw_id?: number;
   date: string;
   total: number;
   status: string;
@@ -44,6 +45,7 @@ const AdminSalesPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -85,6 +87,27 @@ const AdminSalesPage: React.FC = () => {
     return 'processing';
   };
 
+  const getNextDeliveryStatus = (status: string): { next: 'in-transit' | 'delivered'; label: string } | null => {
+    const normalized = normalizeStatus(status);
+    if (normalized === 'processing') return { next: 'in-transit', label: 'Yola Çıkar' };
+    if (normalized === 'in-transit') return { next: 'delivered', label: 'Teslim Edildi Yap' };
+    return null;
+  };
+
+  const updateOrderStatus = async (order: Order, nextStatus: 'in-transit' | 'delivered') => {
+    setUpdatingStatusId(order.id);
+    try {
+      const orderId = order.raw_id ?? order.id;
+      await axios.patch(`${API_URL}/orders/${orderId}/status`, { status: nextStatus }, { headers: getAuthHeader() });
+      setOrders(prev => prev.map(item => item.id === order.id ? { ...item, status: nextStatus } : item));
+    } catch (error) {
+      console.error('Sipariş durumu güncellenemedi:', error);
+      alert('Sipariş durumu güncellenemedi.');
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
   const revenueOrders = filtered.filter(o => normalizeStatus(o.status) !== 'cancelled');
   const completedOrders = filtered.filter(o => normalizeStatus(o.status) === 'delivered');
   const cancelledOrders = filtered.filter(o => normalizeStatus(o.status) === 'cancelled');
@@ -121,14 +144,11 @@ const AdminSalesPage: React.FC = () => {
 
   const inputCls = 'px-4 py-2.5 rounded-xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all';
 
-  const statusCfg: Record<string, { dot: string; text: string; bg: string }> = {
-    'Tamamlandı': { dot: 'bg-teal-DEFAULT', text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
-    'delivered': { dot: 'bg-teal-DEFAULT', text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
-    'İptal Edildi': { dot: 'bg-red-400', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
-    'cancelled': { dot: 'bg-red-400', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
-    'Beklemede':   { dot: 'bg-amber-400', text: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
-    'processing': { dot: 'bg-amber-400', text: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
-    'in-transit': { dot: 'bg-blue-400', text: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
+  const statusCfg: Record<string, { label: string; dot: string; text: string; bg: string }> = {
+    processing: { label: 'processing', dot: 'bg-amber-400', text: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+    'in-transit': { label: 'in-transit', dot: 'bg-blue-400', text: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
+    delivered: { label: 'delivered', dot: 'bg-teal-DEFAULT', text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
+    cancelled: { label: 'cancelled', dot: 'bg-red-400', text: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30' },
   };
 
   return (
@@ -317,8 +337,10 @@ const AdminSalesPage: React.FC = () => {
           ) : (
             <div className="space-y-3">
               {filtered.map((order, i) => {
-                const sc = statusCfg[order.status] || statusCfg['Beklemede'];
+                const normalizedStatus = normalizeStatus(order.status);
+                const sc = statusCfg[normalizedStatus] || statusCfg.processing;
                 const isExpanded = expandedId === order.id;
+                const nextDeliveryStatus = getNextDeliveryStatus(order.status);
                 return (
                   <div key={order.id}
                     className="glass hover:glass-strong rounded-2xl overflow-hidden transition-all animate-fade-up"
@@ -337,8 +359,20 @@ const AdminSalesPage: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-xs font-semibold ${sc.bg} ${sc.text}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>
-                          {order.status}
+                          {sc.label}
                         </span>
+                        {nextDeliveryStatus && (
+                          <button
+                            type="button"
+                            onClick={event => {
+                              event.stopPropagation();
+                              updateOrderStatus(order, nextDeliveryStatus.next);
+                            }}
+                            disabled={updatingStatusId === order.id}
+                            className="px-3 py-1 rounded-pill text-xs font-bold btn-gradient disabled:opacity-60">
+                            {updatingStatusId === order.id ? 'Güncelleniyor...' : nextDeliveryStatus.label}
+                          </button>
+                        )}
                         <p className="font-black text-fg">₺{Number(order.total).toLocaleString('tr-TR')}</p>
                         <svg
                           className={`w-4 h-4 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}

@@ -1,10 +1,115 @@
+import os
+import smtplib
+from email.message import EmailMessage
+from email.utils import formataddr
 from fastapi import APIRouter, Header, HTTPException, Depends
 from typing import List
 from app.core.config import supabase
 from app.schemas.order import CreateOrder
-from datetime import datetime
+from datetime import datetime, timezone
+from pydantic import BaseModel
 
 router = APIRouter()
+
+
+class UpdateOrderStatus(BaseModel):
+    status: str
+
+
+def _pdf_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _ascii(value: object) -> str:
+    return str(value).encode("latin-1", errors="replace").decode("latin-1")
+
+
+def build_invoice_pdf(order_code: str, date_str: str, total: float, items: list, tokens: list[str]) -> bytes:
+    lines = [
+        "TicketHub Invoice",
+        f"Invoice No: {order_code}",
+        f"Date: {date_str}",
+        "",
+        "Items:",
+    ]
+    for item in items:
+        line_total = item.quantity * item.price
+        lines.append(f"- {_ascii(item.event_name)} x{item.quantity} | {_ascii(item.venue)} | TRY {line_total:.2f}")
+    lines.extend([
+        "",
+        f"Total: TRY {float(total):.2f}",
+        "",
+        "Ticket Tokens:",
+    ])
+    lines.extend([f"- {token}" for token in tokens])
+
+    content_lines = [
+        "BT",
+        "/F1 16 Tf",
+        "1 0 0 1 50 810 Tm",
+        f"({_pdf_escape(lines[0])}) Tj",
+        "/F1 10 Tf",
+    ]
+    for index, line in enumerate(lines[1:], start=1):
+        y = 810 - (index * 18)
+        content_lines.append(f"1 0 0 1 50 {y} Tm")
+        content_lines.append(f"({_pdf_escape(line)}) Tj")
+    content_lines.append("ET")
+    stream = "\n".join(content_lines).encode("latin-1", errors="replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode())
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    xref = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode())
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(pdf)
+
+
+def send_invoice_email(recipient: str, order_code: str, pdf_bytes: bytes) -> bool:
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    mail_from = os.getenv("MAIL_FROM") or smtp_user
+
+    if not all([smtp_host, smtp_user, smtp_password, mail_from, recipient]):
+        return False
+
+    msg = EmailMessage()
+    msg["Subject"] = f"TicketHub Faturanız - {order_code}"
+    msg["From"] = formataddr(("TicketHub", mail_from))
+    msg["To"] = recipient
+    msg.set_content(
+        f"Merhaba,\n\n{order_code} numaralı siparişinizin PDF faturası ekte yer almaktadır.\n\nTicketHub"
+    )
+    msg.add_attachment(
+        pdf_bytes,
+        maintype="application",
+        subtype="pdf",
+        filename=f"fatura-{order_code}.pdf",
+    )
+
+    with smtplib.SMTP(smtp_host, smtp_port) as smtp:
+        smtp.starttls()
+        smtp.login(smtp_user, smtp_password)
+        smtp.send_message(msg)
+    return True
 
 async def get_current_user(authorization: str = Header(...)):
     if not authorization.startswith("Bearer "):
@@ -15,6 +120,20 @@ async def get_current_user(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Yetkisiz erişim")
     return response.user
 
+
+def get_user_role(user) -> str:
+    return user.user_metadata.get("role", "customer")
+
+
+def format_order_id(order_id: int) -> str:
+    return f"TH-171210{order_id:04d}"
+
+
+def normalize_order_id(order_id: str) -> int:
+    if order_id.startswith("TH-171210"):
+        return int(order_id.replace("TH-171210", ""))
+    return int(order_id)
+
 @router.post("/orders")
 async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     user_id = user.id
@@ -23,7 +142,7 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     order_data = {
         "user_id": user_id,
         "total": order.total,
-        "status": "Tamamlandı"
+        "status": "processing"
     }
     
     order_res = supabase.table("orders").insert(order_data).execute()
@@ -92,12 +211,32 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     except Exception:
         date_str = created_at
         
+    order_code = f"TH-1712100000{order_id}"
+    invoice_email_sent = False
+    invoice_number = f"INV-{order_id:06d}"
+
+    try:
+        pdf_bytes = build_invoice_pdf(order_code, date_str, created_order["total"], order.items, tokens)
+        invoice_email_sent = send_invoice_email(user.email, order_code, pdf_bytes)
+    except Exception as exc:
+        print(f"Invoice email could not be sent for order {order_code}: {exc}")
+
+    try:
+        supabase.table("orders").update({
+            "invoice_number": invoice_number,
+            "invoice_email_sent": invoice_email_sent,
+            "invoice_email_sent_at": datetime.now(timezone.utc).isoformat() if invoice_email_sent else None
+        }).eq("id", order_id).execute()
+    except Exception as exc:
+        print(f"Invoice metadata could not be updated for order {order_code}: {exc}")
+
     return {
-        "id": f"TH-1712100000{order_id}",
+        "id": order_code,
         "status": created_order["status"],
         "total": created_order["total"],
         "date": date_str,
-        "tokens": tokens
+        "tokens": tokens,
+        "invoice_email_sent": invoice_email_sent
     }
 
 @router.get("/orders")
@@ -155,19 +294,24 @@ async def get_orders(user=Depends(get_current_user)):
     return result
 
 @router.patch("/orders/{order_id}/cancel")
-async def cancel_order(order_id: int, user=Depends(get_current_user)):
+async def cancel_order(order_id: str, user=Depends(get_current_user)):
     user_id = user.id
-    res = supabase.table("orders").select("*").eq("id", order_id).eq("user_id", user_id).single().execute()
+    try:
+        real_id = normalize_order_id(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Geçersiz sipariş ID formatı")
+
+    res = supabase.table("orders").select("*").eq("id", real_id).eq("user_id", user_id).single().execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
     if res.data["status"] in ("İptal Edildi", "cancelled"):
         raise HTTPException(status_code=400, detail="Sipariş zaten iptal edilmiş")
-    supabase.table("orders").update({"status": "İptal Edildi"}).eq("id", order_id).execute()
+    supabase.table("orders").update({"status": "cancelled"}).eq("id", real_id).execute()
     return {"success": True}
 
 @router.get("/orders/all")
 async def get_all_orders(user=Depends(get_current_user)):
-    role = user.user_metadata.get("role", "customer")
+    role = get_user_role(user)
     if role != "sales_manager":
         raise HTTPException(status_code=403, detail="Yetkisiz erişim")
     
@@ -207,7 +351,8 @@ async def get_all_orders(user=Depends(get_current_user)):
             date_str = created_at
         
         result.append({
-            "id": f"TH-171210{o['id']:04d}",
+            "id": format_order_id(o["id"]),
+            "raw_id": o["id"],
             "date": date_str,
             "total": o["total"],
             "status": o["status"],
@@ -216,6 +361,46 @@ async def get_all_orders(user=Depends(get_current_user)):
         })
 
     return result
+
+
+@router.patch("/orders/{order_id}/status")
+async def update_order_status(order_id: str, body: UpdateOrderStatus, user=Depends(get_current_user)):
+    if get_user_role(user) != "sales_manager":
+        raise HTTPException(status_code=403, detail="Sales manager yetkisi gerekiyor")
+
+    allowed_transitions = {
+        "processing": "in-transit",
+        "in-transit": "delivered",
+    }
+
+    try:
+        real_id = normalize_order_id(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Geçersiz sipariş ID formatı")
+
+    if body.status not in {"in-transit", "delivered"}:
+        raise HTTPException(status_code=400, detail="Geçersiz teslimat durumu")
+
+    res = supabase.table("orders").select("*").eq("id", real_id).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
+
+    current_status = res.data.get("status")
+    expected_next = allowed_transitions.get(current_status)
+    if expected_next != body.status:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Geçersiz durum geçişi: {current_status} -> {body.status}"
+        )
+
+    update_res = supabase.table("orders").update({"status": body.status}).eq("id", real_id).execute()
+    if not update_res.data:
+        raise HTTPException(status_code=500, detail="Sipariş durumu güncellenemedi")
+    return {
+        "id": format_order_id(real_id),
+        "raw_id": real_id,
+        "status": body.status
+    }
 
 
 @router.get("/tickets/{token}/verify")
@@ -245,4 +430,3 @@ async def redeem_ticket(token: str, user=Depends(get_current_user)):
         "used_at": datetime.now(timezone.utc).isoformat()
     }).eq("token", token).execute()
     return {"success": True}
-
