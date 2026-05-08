@@ -21,6 +21,7 @@ class CreateComment(BaseModel):
     event_id: int
     content: str
     rating: int
+    rating_only: bool = False
 
 class UpdateComment(BaseModel):
     status: str
@@ -41,13 +42,14 @@ async def get_event_comments(event_id: int):
 
 @router.post("/comments")
 async def create_comment(comment: CreateComment, user=Depends(get_current_user)):
+    is_rating_only = comment.rating_only or not comment.content.strip()
     data = {
         "event_id": comment.event_id,
         "user_id": user.id,
         "user_name": user.user_metadata.get("name", ""),
         "content": comment.content,
         "rating": comment.rating,
-        "status": "pending"
+        "status": "approved" if is_rating_only else "pending"
     }
     res = supabase.table("comments").insert(data).execute()
     if not res.data:

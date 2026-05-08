@@ -133,11 +133,14 @@ const EventDetailPage: React.FC = () => {
   const soldOut = totalRemaining !== undefined && totalRemaining <= 0;
   const selectedRemaining = hasCategories ? selectedCategory?.remaining : totalRemaining;
   const addDisabled = soldOut || (hasCategories && !selectedCategory) || (selectedRemaining !== undefined && selectedRemaining <= 0);
+  const lastOne = !soldOut && totalRemaining === 1;
   const availabilityClass = soldOut
     ? 'bg-red-500/10 border-red-400/40 text-red-300'
-    : totalRemaining !== undefined && totalRemaining <= 10
+    : lastOne
       ? 'bg-amber-500/10 border-amber-400/40 text-amber-300'
-      : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/30 text-teal-DEFAULT';
+      : totalRemaining !== undefined && totalRemaining <= 10
+        ? 'bg-amber-500/10 border-amber-400/40 text-amber-300'
+        : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/30 text-teal-DEFAULT';
 
   return (
     <div className="min-h-screen bg-mesh pt-20">
@@ -163,7 +166,7 @@ const EventDetailPage: React.FC = () => {
                 <span className={`w-2.5 h-2.5 rounded-full ${soldOut ? 'bg-red-400' : totalRemaining <= 10 ? 'bg-amber-300' : 'bg-teal-DEFAULT'}`} />
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Bilet Durumu</p>
-                  <p className="text-sm font-black">{soldOut ? 'Tükendi' : `${totalRemaining} bilet kaldı`}</p>
+                  <p className="text-sm font-black">{soldOut ? 'Tükendi' : lastOne ? '⚠️ Son 1 bilet kaldı!' : `${totalRemaining} bilet kaldı`}</p>
                 </div>
               </div>
             )}
@@ -290,9 +293,9 @@ const EventDetailPage: React.FC = () => {
                 type="button"
                 onClick={handleAddToCart}
                 disabled={addDisabled}
-                className={`px-10 py-4 h-[60px] rounded-2xl font-bold shadow-xl hover:scale-[1.02] transition-all disabled:opacity-60 disabled:hover:scale-100 disabled:cursor-not-allowed w-full sm:w-auto text-[15px] ${soldOut ? 'glass border border-red-400/30 text-red-300' : 'btn-gradient hover:shadow-teal-DEFAULT/20'}`}
+                className={`px-10 py-4 h-[60px] rounded-2xl font-bold shadow-xl hover:scale-[1.02] transition-all disabled:opacity-60 disabled:hover:scale-100 disabled:cursor-not-allowed w-full sm:w-auto text-[15px] ${soldOut ? 'glass border border-red-400/30 text-red-300' : lastOne ? 'bg-amber-500 hover:bg-amber-400 text-white shadow-amber-500/20' : 'btn-gradient hover:shadow-teal-DEFAULT/20'}`}
               >
-                {soldOut ? 'Tükendi' : `Sepete Ekle (${hasCategories && selectedCategory ? `₺${selectedCategory.price * quantity}` : `₺${event.price * quantity}`})`}
+                {soldOut ? 'Stok Tükendi' : lastOne ? `⚠️ Son Bileti Kap! (${hasCategories && selectedCategory ? `₺${selectedCategory.price * quantity}` : `₺${event.price * quantity}`})` : `Sepete Ekle (${hasCategories && selectedCategory ? `₺${selectedCategory.price * quantity}` : `₺${event.price * quantity}`})`}
               </button>
             </div>
 
