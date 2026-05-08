@@ -130,7 +130,12 @@ const EventsPage: React.FC = () => {
   }).sort((a, b) => {
     if (sort === 'price-asc') return a.price - b.price;
     if (sort === 'price-desc') return b.price - a.price;
-    if (sort === 'popularity') return getPopularityScore(b) - getPopularityScore(a);
+    if (sort === 'popularity') {
+      const aSoldOut = (a.remaining_capacity ?? 1) <= 0;
+      const bSoldOut = (b.remaining_capacity ?? 1) <= 0;
+      if (aSoldOut !== bSoldOut) return aSoldOut ? 1 : -1;
+      return getPopularityScore(b) - getPopularityScore(a);
+    }
     return a.date.localeCompare(b.date);
   });
 
