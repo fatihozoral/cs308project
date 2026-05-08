@@ -19,11 +19,10 @@ async def get_current_user(authorization: str = Header(...)):
 async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     user_id = user.id
     
-    # Create order first
     order_data = {
         "user_id": user_id,
         "total": order.total,
-        "status": "Tamamlandı"
+        "status": "processing"
     }
     
     order_res = supabase.table("orders").insert(order_data).execute()
@@ -33,10 +32,8 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     created_order = order_res.data[0]
     order_id = created_order["id"]
     
-    # Create order items
     items_data = []
     for item in order.items:
-        # Update event capacities
         event_res = supabase.table("events").select("remaining_capacity, ticket_categories").eq("id", item.event_id).execute()
         if event_res.data:
             event_data = event_res.data[0]
@@ -44,7 +41,6 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
             if event_data.get("remaining_capacity") is not None:
                 new_rem = max(0, event_data["remaining_capacity"] - item.quantity)
                 update_payload["remaining_capacity"] = new_rem
-                
             categories = event_data.get("ticket_categories")
             item_category = getattr(item, "category", None)
             if categories and item_category:
@@ -53,10 +49,10 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
                         cat["remaining"] = max(0, cat.get("remaining", 0) - item.quantity)
                         break
                 update_payload["ticket_categories"] = categories
-                
             if update_payload:
                 supabase.table("events").update(update_payload).eq("id", item.event_id).execute()
 
+        item_category = getattr(item, "category", None)
         items_data.append({
             "order_id": order_id,
             "event_id": item.event_id,
@@ -71,21 +67,15 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     if items_data:
         supabase.table("order_items").insert(items_data).execute()
 
-    # Create one ticket per quantity per item
     tickets_data = []
     for item in order.items:
         for _ in range(item.quantity):
-            tickets_data.append({
-                "order_id": order_id,
-                "event_id": item.event_id,
-            })
+            tickets_data.append({"order_id": order_id, "event_id": item.event_id})
 
     tickets_res = supabase.table("tickets").insert(tickets_data).execute()
     tokens = [t["token"] for t in (tickets_res.data or [])]
 
-    # Format created order response
     created_at = created_order["created_at"]
-    # Parse timestamptz to simple date format DD.MM.YYYY
     try:
         dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
         date_str = dt.strftime("%d.%m.%Y")
@@ -104,7 +94,6 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
 async def get_orders(user=Depends(get_current_user)):
     user_id = user.id
     
-    # Fetch orders
     orders_res = supabase.table("orders").select("*").eq("user_id", user_id).order("created_at", desc=True).execute()
     orders_data = orders_res.data
     
@@ -113,11 +102,9 @@ async def get_orders(user=Depends(get_current_user)):
         
     order_ids = [o["id"] for o in orders_data]
     
-    # Fetch all items for these orders
     items_res = supabase.table("order_items").select("*").in_("order_id", order_ids).execute()
     items_data = items_res.data
     
-    # Group items by order
     items_by_order = {}
     for item in items_data:
         oid = item["order_id"]
@@ -135,7 +122,6 @@ async def get_orders(user=Depends(get_current_user)):
         
     result = []
     for o in orders_data:
-        # Format date
         created_at = o["created_at"]
         try:
             dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
@@ -154,21 +140,10 @@ async def get_orders(user=Depends(get_current_user)):
 
     return result
 
-@router.patch("/orders/{order_id}/cancel")
-async def cancel_order(order_id: int, user=Depends(get_current_user)):
-    user_id = user.id
-    res = supabase.table("orders").select("*").eq("id", order_id).eq("user_id", user_id).single().execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
-    if res.data["status"] == "İptal Edildi":
-        raise HTTPException(status_code=400, detail="Sipariş zaten iptal edilmiş")
-    supabase.table("orders").update({"status": "İptal Edildi"}).eq("id", order_id).execute()
-    return {"success": True}
-
 @router.get("/orders/all")
 async def get_all_orders(user=Depends(get_current_user)):
     role = user.user_metadata.get("role", "customer")
-    if role != "sales_manager":
+    if role not in ["sales_manager", "product_manager"]:
         raise HTTPException(status_code=403, detail="Yetkisiz erişim")
     
     orders_res = supabase.table("orders").select("*").order("created_at", desc=True).execute()
@@ -208,6 +183,7 @@ async def get_all_orders(user=Depends(get_current_user)):
         
         result.append({
             "id": f"TH-171210{o['id']:04d}",
+            "raw_id": o["id"],
             "date": date_str,
             "total": o["total"],
             "status": o["status"],
@@ -217,34 +193,26 @@ async def get_all_orders(user=Depends(get_current_user)):
 
     return result
 
-
-@router.get("/tickets/{token}/verify")
-async def verify_ticket(token: str, user=Depends(get_current_user)):
-    res = supabase.table("tickets").select("*, events(name, event_date, venue)").eq("token", token).single().execute()
+@router.patch("/orders/{order_id}/status")
+async def update_order_status(order_id: int, body: dict, user=Depends(get_current_user)):
+    role = user.user_metadata.get("role", "customer")
+    if role not in ["product_manager", "sales_manager"]:
+        raise HTTPException(status_code=403, detail="Yetkisiz erişim")
+    
+    new_status = body.get("status")
+    valid_statuses = ["processing", "in-transit", "delivered"]
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail="Geçersiz durum")
+    
+    res = supabase.table("orders").select("*").eq("id", order_id).execute()
     if not res.data:
-        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
-    t = res.data
-    return {
-        "valid": True,
-        "is_used": t["is_used"],
-        "used_at": t["used_at"],
-        "event": t["events"]["name"] if t.get("events") else None,
-    }
-
-
-@router.post("/tickets/{token}/redeem")
-async def redeem_ticket(token: str, user=Depends(get_current_user)):
-    res = supabase.table("tickets").select("*").eq("token", token).single().execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
-    if res.data["is_used"]:
-        raise HTTPException(status_code=409, detail="Bu bilet zaten kullanılmış")
-    from datetime import datetime, timezone
-    supabase.table("tickets").update({
-        "is_used": True,
-        "used_at": datetime.now(timezone.utc).isoformat()
-    }).eq("token", token).execute()
-    return {"success": True}
+        raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
+    
+    update_res = supabase.table("orders").update({"status": new_status}).eq("id", order_id).execute()
+    if not update_res.data:
+        raise HTTPException(status_code=500, detail="Durum güncellenemedi")
+    
+    return {"success": True, "status": new_status, "order_id": order_id}
 
 @router.patch("/orders/{order_id}/cancel")
 async def cancel_order(order_id: str, user=Depends(get_current_user)):
@@ -263,9 +231,35 @@ async def cancel_order(order_id: str, user=Depends(get_current_user)):
     if order["status"] not in ["Tamamlandı", "processing"]:
         raise HTTPException(status_code=400, detail="Bu sipariş iptal edilemez")
         
-    # Update status
     update_res = supabase.table("orders").update({"status": "cancelled"}).eq("id", real_id).execute()
     if not update_res.data:
         raise HTTPException(status_code=500, detail="Sipariş iptal edilirken bir hata oluştu")
         
     return {"message": "Sipariş başarıyla iptal edildi"}
+
+@router.get("/tickets/{token}/verify")
+async def verify_ticket(token: str, user=Depends(get_current_user)):
+    res = supabase.table("tickets").select("*, events(name, event_date, venue)").eq("token", token).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
+    t = res.data
+    return {
+        "valid": True,
+        "is_used": t["is_used"],
+        "used_at": t["used_at"],
+        "event": t["events"]["name"] if t.get("events") else None,
+    }
+
+@router.post("/tickets/{token}/redeem")
+async def redeem_ticket(token: str, user=Depends(get_current_user)):
+    res = supabase.table("tickets").select("*").eq("token", token).single().execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Bilet bulunamadı")
+    if res.data["is_used"]:
+        raise HTTPException(status_code=409, detail="Bu bilet zaten kullanılmış")
+    from datetime import datetime, timezone
+    supabase.table("tickets").update({
+        "is_used": True,
+        "used_at": datetime.now(timezone.utc).isoformat()
+    }).eq("token", token).execute()
+    return {"success": True}

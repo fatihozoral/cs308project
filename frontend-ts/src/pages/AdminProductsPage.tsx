@@ -1,7 +1,7 @@
 /**
  * Admin Products Page
  * CS 308 Online Ticketing Project - TypeScript
- * Product Manager Dashboard - Event/Product management + Comment moderation
+ * Product Manager Dashboard - Event/Product management + Comment moderation + Delivery
  */
 
 import React, { useState, useEffect } from 'react';
@@ -39,16 +39,37 @@ interface Comment {
   created_at: string;
 }
 
+interface Order {
+  id: string;
+  raw_id: number;
+  date: string;
+  total: number;
+  status: string;
+  user_id: string;
+  items: { id: number; name: string; quantity: number; price: number; date: string; venue: string }[];
+}
+
 const CATEGORIES = ['Konser', 'Spor', 'Tiyatro', 'Festival'];
+
+const STATUS_MAP: Record<string, { label: string; dot: string; text: string; bg: string }> = {
+  'processing':   { label: 'İşleniyor',     dot: 'bg-amber-400',    text: 'text-amber-400',    bg: 'bg-amber-500/10 border-amber-500/30' },
+  'in-transit':   { label: 'Yolda',         dot: 'bg-blue-400',     text: 'text-blue-400',     bg: 'bg-blue-500/10 border-blue-500/30' },
+  'delivered':    { label: 'Teslim Edildi', dot: 'bg-teal-DEFAULT',  text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
+  'Tamamlandı':   { label: 'Tamamlandı',    dot: 'bg-teal-DEFAULT',  text: 'text-teal-DEFAULT', bg: 'bg-teal-dim border-teal-DEFAULT/30' },
+  'İptal Edildi': { label: 'İptal',         dot: 'bg-red-400',      text: 'text-red-400',      bg: 'bg-red-500/10 border-red-500/30' },
+  'cancelled':    { label: 'İptal',         dot: 'bg-red-400',      text: 'text-red-400',      bg: 'bg-red-500/10 border-red-500/30' },
+};
 
 const AdminProductsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<'products' | 'comments'>('products');
+  const [tab, setTab] = useState<'products' | 'comments' | 'delivery'>('products');
   const [events, setEvents] = useState<Event[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOrders, setLoadingOrders] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editingStock, setEditingStock] = useState<{ id: number; value: string } | null>(null);
@@ -61,68 +82,38 @@ const AdminProductsPage: React.FC = () => {
   });
 
   const placeInputRef = React.useRef<HTMLInputElement>(null);
-  const autocompleteRef = React.useRef<google.maps.places.Autocomplete | null>(null);
+  const autocompleteRef = React.useRef<any>(null);
 
   useEffect(() => {
     fetchEvents();
     fetchComments();
+    fetchOrders();
 
     if (!GOOGLE_MAPS_API_KEY) return;
-
-    if (typeof google !== 'undefined' && google.maps && google.maps.places) {
-      setIsGoogleLoaded(true);
-      return;
-    }
-
-    let existingScript = document.querySelector('script[src*="maps.googleapis.com"]') as HTMLScriptElement;
-    if (existingScript) {
-      existingScript.addEventListener('load', () => setIsGoogleLoaded(true));
-      return;
-    }
-
+    if (typeof (window as any).google !== 'undefined') { setIsGoogleLoaded(true); return; }
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
     script.async = true;
-    script.defer = true;
     script.onload = () => setIsGoogleLoaded(true);
     document.head.appendChild(script);
   }, []);
 
   useEffect(() => {
     if (showModal && isGoogleLoaded && placeInputRef.current) {
-      autocompleteRef.current = new google.maps.places.Autocomplete(placeInputRef.current, {
-        types: ['establishment', 'geocode'],
-      });
-
+      autocompleteRef.current = new (window as any).google.maps.places.Autocomplete(placeInputRef.current, { types: ['establishment', 'geocode'] });
       const listener = autocompleteRef.current.addListener('place_changed', () => {
         const place = autocompleteRef.current?.getPlace();
         if (place) {
           let locality = '';
           if (place.address_components) {
-            let locComp = place.address_components.find((c: any) => c.types.includes('locality'));
-            if (!locComp) {
-              locComp = place.address_components.find((c: any) => c.types.includes('administrative_area_level_1'));
-            }
-            if (locComp) {
-              locality = locComp.long_name;
-            }
+            const locComp = place.address_components.find((c: any) => c.types.includes('locality')) ||
+              place.address_components.find((c: any) => c.types.includes('administrative_area_level_1'));
+            if (locComp) locality = locComp.long_name;
           }
-          setForm(p => ({
-            ...p,
-            venue: place.name || p.venue,
-            city: locality || p.city,
-            place_id: place.place_id || '',
-            lat: place.geometry?.location?.lat() || null,
-            lng: place.geometry?.location?.lng() || null,
-          }));
+          setForm(p => ({ ...p, venue: place.name || p.venue, city: locality || p.city, place_id: place.place_id || '', lat: place.geometry?.location?.lat() || null, lng: place.geometry?.location?.lng() || null }));
         }
       });
-
-      return () => {
-        if (listener && typeof google !== 'undefined' && google.maps && google.maps.event) {
-          google.maps.event.removeListener(listener);
-        }
-      };
+      return () => { if (listener) (window as any).google?.maps?.event?.removeListener(listener); };
     }
   }, [showModal, isGoogleLoaded]);
 
@@ -132,28 +123,27 @@ const AdminProductsPage: React.FC = () => {
       const res = await axios.get(`${API_URL}/events/all`, { headers: getAuthHeader() });
       setEvents(res.data);
     } catch {
-      try {
-        const res = await axios.get(`${API_URL}/events`, { headers: getAuthHeader() });
-        setEvents(res.data);
-      } catch { setEvents([]); }
+      try { const res = await axios.get(`${API_URL}/events`, { headers: getAuthHeader() }); setEvents(res.data); }
+      catch { setEvents([]); }
     } finally { setLoading(false); }
   };
 
   const fetchComments = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/comments/pending`, { headers: getAuthHeader() });
-      setComments(res.data);
-    } catch { setComments([]); }
+    try { const res = await axios.get(`${API_URL}/comments/pending`, { headers: getAuthHeader() }); setComments(res.data); }
+    catch { setComments([]); }
+  };
+
+  const fetchOrders = async () => {
+    setLoadingOrders(true);
+    try { const res = await axios.get(`${API_URL}/orders/all`, { headers: getAuthHeader() }); setOrders(res.data); }
+    catch { setOrders([]); }
+    finally { setLoadingOrders(false); }
   };
 
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_URL}/events`, {
-        ...form,
-        price: Number(form.price),
-        stock_quantity: Number(form.stock_quantity)
-      }, { headers: getAuthHeader() });
+      await axios.post(`${API_URL}/events`, { ...form, price: Number(form.price), stock_quantity: Number(form.stock_quantity) }, { headers: getAuthHeader() });
       setShowModal(false);
       setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', stock_quantity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', lat: null, lng: null });
       fetchEvents();
@@ -161,11 +151,8 @@ const AdminProductsPage: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    try {
-      await axios.delete(`${API_URL}/events/${id}`, { headers: getAuthHeader() });
-      setEvents(prev => prev.filter(e => e.id !== id));
-      setDeleteConfirmId(null);
-    } catch { alert('Silinemedi.'); }
+    try { await axios.delete(`${API_URL}/events/${id}`, { headers: getAuthHeader() }); setEvents(prev => prev.filter(e => e.id !== id)); setDeleteConfirmId(null); }
+    catch { alert('Silinemedi.'); }
   };
 
   const handleStockSave = async (id: number) => {
@@ -178,10 +165,15 @@ const AdminProductsPage: React.FC = () => {
   };
 
   const handleCommentAction = async (id: number, status: 'approved' | 'rejected') => {
+    try { await axios.patch(`${API_URL}/comments/${id}`, { status }, { headers: getAuthHeader() }); setComments(prev => prev.filter(c => c.id !== id)); }
+    catch { alert('İşlem başarısız.'); }
+  };
+
+  const handleOrderStatus = async (rawId: number, newStatus: string) => {
     try {
-      await axios.patch(`${API_URL}/comments/${id}`, { status }, { headers: getAuthHeader() });
-      setComments(prev => prev.filter(c => c.id !== id));
-    } catch { alert('İşlem başarısız.'); }
+      await axios.patch(`${API_URL}/orders/${rawId}/status`, { status: newStatus }, { headers: getAuthHeader() });
+      setOrders(prev => prev.map(o => o.raw_id === rawId ? { ...o, status: newStatus } : o));
+    } catch { alert('Durum güncellenemedi.'); }
   };
 
   const inputCls = 'w-full px-4 py-3 rounded-xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all';
@@ -193,8 +185,7 @@ const AdminProductsPage: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-gradient-cta flex items-center justify-center">
             <svg className="w-4 h-4 text-bg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </div>
           <div>
@@ -207,21 +198,23 @@ const AdminProductsPage: React.FC = () => {
             <p className="text-sm font-semibold text-fg">{user?.name}</p>
             <p className="text-xs text-muted">Product Manager</p>
           </div>
-          <button onClick={() => { logout(); navigate('/login'); }}
-            className="btn-ghost px-4 py-1.5 text-xs font-medium">Çıkış</button>
+          <button onClick={() => { logout(); navigate('/login'); }} className="btn-ghost px-4 py-1.5 text-xs font-medium">Çıkış</button>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-8 py-12 space-y-8">
-        {/* Title */}
         <div className="animate-fade-up">
           <h1 className="text-4xl font-black text-fg tracking-tight">Ürün Yönetimi</h1>
-          <p className="text-muted mt-1">Etkinlik yönetimi ve yorum moderasyonu</p>
+          <p className="text-muted mt-1">Etkinlik yönetimi, yorum moderasyonu ve teslimat takibi</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2">
-          {[{ key: 'products', label: '🎟️ Etkinlikler' }, { key: 'comments', label: `💬 Yorum Onaylama ${comments.length > 0 ? `(${comments.length})` : ''}` }].map(t => (
+        <div className="flex gap-2 flex-wrap">
+          {[
+            { key: 'products', label: '🎟️ Etkinlikler' },
+            { key: 'comments', label: `💬 Yorum Onaylama${comments.length > 0 ? ` (${comments.length})` : ''}` },
+            { key: 'delivery', label: `🚚 Teslimat Yönetimi${orders.length > 0 ? ` (${orders.length})` : ''}` },
+          ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as any)}
               className={`px-5 py-2.5 rounded-pill text-sm font-semibold transition-all ${tab === t.key ? 'btn-gradient' : 'btn-ghost'}`}>
               {t.label}
@@ -235,20 +228,14 @@ const AdminProductsPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">{events.length} etkinlik</span>
               <button onClick={() => setShowModal(true)} className="btn-gradient px-5 py-2.5 text-sm font-bold flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
                 Yeni Etkinlik Ekle
               </button>
             </div>
-
             {loading ? (
               <div className="glass rounded-2xl p-12 text-center text-muted">Yükleniyor...</div>
             ) : events.length === 0 ? (
-              <div className="glass rounded-2xl p-12 text-center">
-                <p className="text-4xl mb-3">🎟️</p>
-                <p className="text-muted">Henüz etkinlik yok</p>
-              </div>
+              <div className="glass rounded-2xl p-12 text-center"><p className="text-4xl mb-3">🎟️</p><p className="text-muted">Henüz etkinlik yok</p></div>
             ) : (
               <div className="glass-strong rounded-3xl overflow-hidden">
                 <table className="w-full">
@@ -268,46 +255,26 @@ const AdminProductsPage: React.FC = () => {
                             <div>
                               <p className="font-semibold text-fg text-sm">{event.name}</p>
                               <p className="text-xs text-muted">{event.venue}, {event.city}</p>
-                              {event.place_id && GOOGLE_MAPS_API_KEY && (
-                                <div className="mt-2">
-                                  <iframe
-                                    width="200"
-                                    height="120"
-                                    style={{ border: 0, borderRadius: '8px' }}
-                                    loading="lazy"
-                                    allowFullScreen
-                                    referrerPolicy="no-referrer-when-downgrade"
-                                    src={`https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=place_id:${event.place_id}`}
-                                  ></iframe>
-                                </div>
-                              )}
                             </div>
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className="glass px-2.5 py-1 rounded-pill text-xs font-medium text-teal-DEFAULT border border-teal-DEFAULT/20">
-                            {event.category}
-                          </span>
+                          <span className="glass px-2.5 py-1 rounded-pill text-xs font-medium text-teal-DEFAULT border border-teal-DEFAULT/20">{event.category}</span>
                         </td>
                         <td className="px-5 py-4 font-bold text-fg">₺{event.price}</td>
                         <td className="px-5 py-4">
                           {editingStock?.id === event.id ? (
                             <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={editingStock.value}
+                              <input type="number" value={editingStock.value}
                                 onChange={e => setEditingStock({ id: event.id, value: e.target.value })}
                                 onKeyDown={e => { if (e.key === 'Enter') handleStockSave(event.id); if (e.key === 'Escape') setEditingStock(null); }}
-                                className="w-20 px-2 py-1 rounded-lg glass text-fg text-sm focus:outline-none"
-                                autoFocus
-                              />
+                                className="w-20 px-2 py-1 rounded-lg glass text-fg text-sm focus:outline-none" autoFocus />
                               <button onClick={() => handleStockSave(event.id)} className="text-teal-DEFAULT text-xs font-bold">✓</button>
                             </div>
                           ) : (
                             <button onClick={() => setEditingStock({ id: event.id, value: String(event.stock_quantity ?? 0) })}
                               className="text-sm text-fg hover:text-teal-DEFAULT transition-colors font-medium">
-                              {event.stock_quantity ?? 0}
-                              <span className="text-xs text-muted ml-1">✎</span>
+                              {event.stock_quantity ?? 0}<span className="text-xs text-muted ml-1">✎</span>
                             </button>
                           )}
                         </td>
@@ -319,9 +286,7 @@ const AdminProductsPage: React.FC = () => {
                         </td>
                         <td className="px-5 py-4">
                           <button onClick={() => setDeleteConfirmId(event.id)}
-                            className="text-xs font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-3 py-1 rounded-pill transition-colors">
-                            Sil
-                          </button>
+                            className="text-xs font-semibold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-3 py-1 rounded-pill transition-colors">Sil</button>
                         </td>
                       </tr>
                     ))}
@@ -336,10 +301,7 @@ const AdminProductsPage: React.FC = () => {
         {tab === 'comments' && (
           <div className="animate-fade-up space-y-4">
             {comments.length === 0 ? (
-              <div className="glass rounded-2xl p-12 text-center">
-                <p className="text-4xl mb-3">✅</p>
-                <p className="text-muted">Bekleyen yorum yok</p>
-              </div>
+              <div className="glass rounded-2xl p-12 text-center"><p className="text-4xl mb-3">✅</p><p className="text-muted">Bekleyen yorum yok</p></div>
             ) : (
               comments.map((comment, i) => (
                 <div key={comment.id} className="glass hover:glass-strong rounded-2xl p-6 animate-fade-up" style={{ animationDelay: `${i * 0.05}s` }}>
@@ -354,26 +316,101 @@ const AdminProductsPage: React.FC = () => {
                           {comment.event_name && <p className="text-xs text-muted">{comment.event_name}</p>}
                         </div>
                         <div className="flex gap-0.5 ml-2">
-                          {[1, 2, 3, 4, 5].map(s => (
-                            <span key={s} className={`text-sm ${s <= comment.rating ? 'text-amber-400' : 'text-muted'}`}>★</span>
-                          ))}
+                          {[1,2,3,4,5].map(s => <span key={s} className={`text-sm ${s <= comment.rating ? 'text-amber-400' : 'text-muted'}`}>★</span>)}
                         </div>
                       </div>
                       <p className="text-sm text-fg leading-relaxed">{comment.content}</p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
-                      <button onClick={() => handleCommentAction(comment.id, 'approved')}
-                        className="btn-gradient px-4 py-2 text-xs font-bold">
-                        Onayla
-                      </button>
+                      <button onClick={() => handleCommentAction(comment.id, 'approved')} className="btn-gradient px-4 py-2 text-xs font-bold">Onayla</button>
                       <button onClick={() => handleCommentAction(comment.id, 'rejected')}
-                        className="px-4 py-2 text-xs font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors">
-                        Reddet
-                      </button>
+                        className="px-4 py-2 text-xs font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors">Reddet</button>
                     </div>
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* DELIVERY TAB */}
+        {tab === 'delivery' && (
+          <div className="animate-fade-up space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-bold text-fg">Teslimat Listesi</h2>
+              <span className="text-xs text-muted">{orders.length} sipariş</span>
+            </div>
+
+            {/* Status legend */}
+            <div className="flex flex-wrap gap-3 glass rounded-2xl px-5 py-3">
+              {[
+                { status: 'processing', label: '📦 İşleniyor' },
+                { status: 'in-transit', label: '🚚 Yolda' },
+                { status: 'delivered',  label: '✅ Teslim Edildi' },
+              ].map(({ status, label }) => {
+                const sc = STATUS_MAP[status];
+                return (
+                  <span key={status} className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-xs font-semibold ${sc.bg} ${sc.text}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />{label}
+                  </span>
+                );
+              })}
+            </div>
+
+            {loadingOrders ? (
+              <div className="glass rounded-2xl p-12 text-center text-muted">Yükleniyor...</div>
+            ) : orders.length === 0 ? (
+              <div className="glass rounded-2xl p-12 text-center"><p className="text-4xl mb-3">📦</p><p className="text-muted">Sipariş bulunamadı</p></div>
+            ) : (
+              <div className="space-y-3">
+                {orders
+                  .filter(o => !['İptal Edildi', 'cancelled'].includes(o.status))
+                  .map((order, i) => {
+                    const sc = STATUS_MAP[order.status] || { label: order.status, dot: 'bg-muted', text: 'text-muted', bg: 'bg-white/5 border-white/10' };
+                    return (
+                      <div key={order.id} className="glass hover:glass-strong rounded-2xl overflow-hidden transition-all animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                          <div className="flex items-center gap-6">
+                            <p className="font-mono font-bold text-fg text-sm">{order.id}</p>
+                            <p className="text-sm text-muted hidden sm:block">{order.date}</p>
+                            <p className="font-bold text-fg">₺{Number(order.total).toLocaleString('tr-TR')}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-xs font-semibold ${sc.bg} ${sc.text}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />{sc.label}
+                            </span>
+                            {/* Status change buttons */}
+                            <div className="flex gap-2">
+                              {order.status !== 'in-transit' && order.status !== 'delivered' && (
+                                <button onClick={() => handleOrderStatus(order.raw_id, 'in-transit')}
+                                  className="text-xs px-3 py-1.5 rounded-pill border border-blue-500/40 text-blue-400 hover:bg-blue-500/10 transition-colors font-semibold">
+                                  🚚 Yola Çıkar
+                                </button>
+                              )}
+                              {order.status === 'in-transit' && (
+                                <button onClick={() => handleOrderStatus(order.raw_id, 'delivered')}
+                                  className="btn-gradient text-xs px-3 py-1.5 font-bold">
+                                  ✓ Teslim Et
+                                </button>
+                              )}
+                              {order.status === 'delivered' && (
+                                <span className="text-xs text-teal-DEFAULT font-semibold">Teslim edildi ✓</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-6 py-3 space-y-2">
+                          {order.items.map(item => (
+                            <div key={item.id} className="flex justify-between text-sm">
+                              <span className="text-fg">{item.name} <span className="text-muted">×{item.quantity}</span></span>
+                              <span className="font-semibold text-fg">₺{item.price * item.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
             )}
           </div>
         )}
@@ -391,8 +428,8 @@ const AdminProductsPage: React.FC = () => {
                   <input required value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Etkinlik adı" className={inputCls} />
                 </div>
                 <div className="col-span-2 space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Etkinlik Açıklaması</label>
-                  <textarea required value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Etkinlik hakkında detaylar" className={`${inputCls} min-h-[80px] resize-y`}></textarea>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Açıklama</label>
+                  <textarea required value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Etkinlik hakkında detaylar" className={`${inputCls} min-h-[80px] resize-y`} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Kategori</label>
@@ -401,10 +438,8 @@ const AdminProductsPage: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">
-                    {form.category === 'Konser' ? 'Sanatçı Adı' : form.category === 'Spor' ? 'Takımlar' : form.category === 'Tiyatro' ? 'Oyuncu / Yönetmen' : form.category === 'Festival' ? 'Başlıca İsimler' : 'Öne Çıkan İsimler'}
-                  </label>
-                  <input required value={form.featured_names} onChange={e => setForm(p => ({ ...p, featured_names: e.target.value }))} placeholder="Örn: Tarkan, Galatasaray..." className={inputCls} />
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Öne Çıkan İsimler</label>
+                  <input required value={form.featured_names} onChange={e => setForm(p => ({ ...p, featured_names: e.target.value }))} placeholder="Örn: Tarkan" className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Fiyat (₺)</label>
@@ -453,9 +488,7 @@ const AdminProductsPage: React.FC = () => {
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirmId(null)} className="flex-1 btn-ghost py-2.5 text-sm font-semibold">Vazgeç</button>
               <button onClick={() => handleDelete(deleteConfirmId)}
-                className="flex-1 py-2.5 text-sm font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors">
-                Evet, Sil
-              </button>
+                className="flex-1 py-2.5 text-sm font-bold rounded-pill bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors">Evet, Sil</button>
             </div>
           </div>
         </div>
