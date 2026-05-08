@@ -262,6 +262,7 @@ const EventsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filtered.map((event, i) => {
               const soldOut = (event.remaining_capacity ?? 1) <= 0;
+              const lastOne = !soldOut && event.remaining_capacity === 1;
               return (
               <div key={event.id}
                 onClick={() => wishlistSelectMode ? toggleWishlistSelection(event.id) : setSelectedEvent(event)}
@@ -278,6 +279,13 @@ const EventsPage: React.FC = () => {
                     <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] flex items-center justify-center">
                       <span className="px-4 py-2 rounded-pill bg-red-500/20 border border-red-400/50 text-red-100 text-xs font-black uppercase tracking-[0.22em] shadow-lg">
                         Tükendi
+                      </span>
+                    </div>
+                  )}
+                  {lastOne && (
+                    <div className="absolute top-3 left-3">
+                      <span className="px-3 py-1 rounded-pill bg-amber-500/20 border border-amber-400/50 text-amber-200 text-xs font-black uppercase tracking-[0.18em] shadow-lg">
+                        Son 1 Stok!
                       </span>
                     </div>
                   )}
@@ -300,7 +308,10 @@ const EventsPage: React.FC = () => {
                   <div className="space-y-1 text-xs text-muted flex-1">
                     <p>📅 {event.date} · {event.time}</p>
                     <p>📍 {event.venue}, {event.city}</p>
-                    {event.remaining_capacity !== undefined && !soldOut && (
+                    {lastOne && (
+                      <p className="text-amber-400 font-bold animate-pulse">⚠️ Son 1 bilet kaldı!</p>
+                    )}
+                    {event.remaining_capacity !== undefined && !soldOut && !lastOne && (
                       <p className="text-teal-DEFAULT font-semibold">Kalan {event.remaining_capacity} bilet</p>
                     )}
                   </div>

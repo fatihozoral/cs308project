@@ -4,11 +4,14 @@ import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
 import axios from 'axios';
 import { getAuthHeader } from '@/services/authService';
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
-
 interface CartItem { id: number; cartItemId?: string | number; name: string; price: number; date: string; venue: string; quantity: number; category?: string; }
+
+interface OrderResult { id: string; date: string; total: number; }
 
 const CartPage: React.FC = () => {
   const { user } = useAuth();
@@ -20,6 +23,8 @@ const CartPage: React.FC = () => {
   const [cvv, setCvv] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
+  const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([]);
 
   useEffect(() => { localStorage.setItem('cart', JSON.stringify(cart)); }, [cart]);
 
@@ -48,8 +53,9 @@ const CartPage: React.FC = () => {
         price: item.price,
         category: item.category
       }));
-      await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
-
+      const res = await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
+      setPurchasedItems([...cart]);
+      setOrderResult({ id: res.data.id, date: res.data.date, total: subtotal });
       localStorage.removeItem('cart');
       setCart([]);
       setSuccess(true);
@@ -63,21 +69,132 @@ const CartPage: React.FC = () => {
 
   const inputCls = 'w-full px-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-accent transition-all';
 
+  const tr = (s: string) => s
+    .replace(/ş/g,'s').replace(/Ş/g,'S')
+    .replace(/ı/g,'i').replace(/İ/g,'I')
+    .replace(/ğ/g,'g').replace(/Ğ/g,'G')
+    .replace(/ü/g,'u').replace(/Ü/g,'U')
+    .replace(/ö/g,'o').replace(/Ö/g,'O')
+    .replace(/ç/g,'c').replace(/Ç/g,'C')
+    .replace(/₺/g,'TL');
+
+  const downloadInvoicePDF = async () => {
+    if (!orderResult || purchasedItems.length === 0) return;
+    const qrData = JSON.stringify({ orderId: orderResult.id, date: orderResult.date, total: orderResult.total });
+    const qrDataUrl = await QRCode.toDataURL(qrData, { width: 200, margin: 1 });
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+    const W = pdf.internal.pageSize.getWidth();
+    pdf.setFillColor(22, 27, 34);
+    pdf.rect(0, 0, W, 210, 'F');
+    pdf.setFillColor(14, 116, 144);
+    pdf.rect(0, 0, W, 18, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.text('TicketHub - Fatura', W / 2, 11, { align: 'center' });
+    pdf.setTextColor(240, 246, 252);
+    pdf.setFontSize(13);
+    pdf.text('Siparis Faturasi', W / 2, 30, { align: 'center' });
+    pdf.setDrawColor(45, 212, 191);
+    pdf.setLineWidth(0.3);
+    pdf.line(15, 35, W - 15, 35);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    let y = 44;
+    purchasedItems.forEach(item => {
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(tr(item.name), 15, y);
+      pdf.setTextColor(240, 246, 252);
+      pdf.text(`${item.quantity} x TL${item.price} = TL${item.quantity * item.price}`, W - 15, y, { align: 'right' });
+      y += 8;
+    });
+    pdf.setDrawColor(45, 212, 191);
+    pdf.line(15, y, W - 15, y);
+    y += 7;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(45, 212, 191);
+    pdf.text('TOPLAM:', 15, y);
+    pdf.text(`TL${orderResult.total}`, W - 15, y, { align: 'right' });
+    y += 12;
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(7);
+    pdf.setTextColor(100, 116, 139);
+    pdf.text(`Siparis No: ${orderResult.id}`, 15, y);
+    pdf.text(`Tarih: ${orderResult.date}`, W - 15, y, { align: 'right' });
+    y += 7;
+    if (user?.email) { pdf.text(`Musteri: ${user.email}`, 15, y); y += 7; }
+    pdf.addImage(qrDataUrl, 'PNG', W / 2 - 22, y + 5, 44, 44);
+    pdf.setFillColor(14, 116, 144);
+    pdf.rect(0, 195, W, 15, 'F');
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(7);
+    pdf.text('tickethub.com', W / 2, 204, { align: 'center' });
+    pdf.save(`fatura-${orderResult.id}.pdf`);
+  };
+
   if (success) return (
     <div className="min-h-screen bg-mesh pt-20">
       <Navbar cartCount={0}/>
-      <div className="max-w-lg mx-auto px-8 py-24 text-center animate-fade-up">
-        <div className="glass-strong rounded-3xl p-12">
-          <div className="w-16 h-16 rounded-full bg-teal-dim border border-teal-DEFAULT/30 flex items-center justify-center mx-auto mb-6">
-            <svg className="w-8 h-8 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7"/>
-            </svg>
+      <div className="max-w-xl mx-auto px-8 py-16 animate-fade-up">
+        <div className="glass-strong rounded-3xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-teal-DEFAULT/20 border-b border-teal-DEFAULT/20 px-8 py-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-teal-dim border border-teal-DEFAULT/40 flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-fg">Ödeme Başarılı!</h2>
+              <p className="text-teal-DEFAULT text-sm font-semibold">Siparişiniz alındı</p>
+            </div>
           </div>
-          <h2 className="text-3xl font-black text-fg mb-2">Sipariş Tamamlandı!</h2>
-          <p className="text-muted mb-10">Biletleriniz e-posta adresinize gönderildi.</p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link to="/orders" className="btn-gradient px-6 py-3 text-sm font-bold">Siparişlerimi Gör</Link>
-            <Link to="/events" className="btn-ghost px-6 py-3 text-sm font-semibold">Alışverişe Devam</Link>
+
+          {/* Invoice body */}
+          <div className="px-8 py-6 space-y-1">
+            <div className="flex justify-between text-xs text-muted mb-4">
+              <span>Sipariş No: <span className="text-fg font-bold">{orderResult?.id}</span></span>
+              <span>{orderResult?.date}</span>
+            </div>
+
+            <div className="space-y-3">
+              {purchasedItems.map(item => (
+                <div key={item.cartItemId || item.id} className="flex items-center justify-between py-3 border-b border-border">
+                  <div>
+                    <p className="font-semibold text-fg text-sm">{item.name}</p>
+                    <p className="text-xs text-muted">{item.date} · {item.venue}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-4">
+                    <p className="text-xs text-muted">{item.quantity} bilet × ₺{item.price}</p>
+                    <p className="font-black text-fg">₺{item.quantity * item.price}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center pt-4">
+              <span className="font-black text-fg text-lg">Toplam</span>
+              <span className="font-black text-teal-DEFAULT text-2xl">₺{orderResult?.total}</span>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2 text-xs text-muted bg-teal-DEFAULT/5 border border-teal-DEFAULT/20 rounded-2xl px-4 py-3">
+              <svg className="w-4 h-4 text-teal-DEFAULT flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+              Fatura PDF'i <strong className="text-fg">{user?.email}</strong> adresine gönderildi.
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="px-8 py-6 border-t border-border flex flex-col sm:flex-row gap-3">
+            <button onClick={downloadInvoicePDF} className="btn-gradient px-6 py-3 text-sm font-bold flex items-center justify-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              </svg>
+              PDF Fatura İndir
+            </button>
+            <Link to="/orders" className="btn-ghost px-6 py-3 text-sm font-semibold text-center">Siparişlerimi Gör</Link>
+            <Link to="/events" className="btn-ghost px-6 py-3 text-sm font-semibold text-center">Alışverişe Devam</Link>
           </div>
         </div>
       </div>

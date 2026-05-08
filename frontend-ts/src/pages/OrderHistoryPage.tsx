@@ -93,9 +93,18 @@ const OrderHistoryPage: React.FC = () => {
     pdf.setFont('helvetica', 'bold');
     pdf.text('TicketHub - E-Bilet', W / 2, 11, { align: 'center' });
 
+    const tr = (s: string) => s
+      .replace(/ş/g,'s').replace(/Ş/g,'S')
+      .replace(/ı/g,'i').replace(/İ/g,'I')
+      .replace(/ğ/g,'g').replace(/Ğ/g,'G')
+      .replace(/ü/g,'u').replace(/Ü/g,'U')
+      .replace(/ö/g,'o').replace(/Ö/g,'O')
+      .replace(/ç/g,'c').replace(/Ç/g,'C')
+      .replace(/₺/g,'TL');
+
     pdf.setTextColor(240, 246, 252);
     pdf.setFontSize(16);
-    pdf.text(firstItem?.name || 'Sipariş', W / 2, 35, { align: 'center' });
+    pdf.text(tr(firstItem?.name || 'Siparis'), W / 2, 35, { align: 'center' });
     pdf.setDrawColor(45, 212, 191);
     pdf.setLineWidth(0.3);
     pdf.line(15, 40, W - 15, 40);
@@ -104,7 +113,7 @@ const OrderHistoryPage: React.FC = () => {
     pdf.setFont('helvetica', 'normal');
     const details = [
       ['Tarih', firstItem?.date || order.date],
-      ['Mekan', firstItem?.venue || '-'],
+      ['Mekan', tr(firstItem?.venue || '-')],
       ['Bilet Adedi', `${order.items.reduce((sum, item) => sum + item.quantity, 0)} bilet`],
       ['Tutar', `${order.total} TL`],
       ['Siparis No', order.id],

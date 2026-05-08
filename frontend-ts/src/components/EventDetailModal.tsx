@@ -107,17 +107,23 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
       navigate(`/login?redirect=${encodeURIComponent('/events')}`);
       return;
     }
-    if (!content.trim()) return;
     setSubmitting(true);
     try {
       await axios.post(`${API_URL}/comments`, {
         event_id: event.id,
         content: content.trim(),
-        rating
+        rating,
+        rating_only: !content.trim()
       }, { headers: getAuthHeader() });
       setSubmitted(true);
       setContent('');
       setRating(5);
+      if (!content.trim()) {
+        // rating-only: reload comments so average updates immediately
+        const res = await axios.get(`${API_URL}/comments/event/${event.id}`);
+        setComments(res.data);
+        setSubmitted(false);
+      }
     } catch {
       alert('Yorum gönderilemedi.');
     } finally {
@@ -268,10 +274,9 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest mb-2 block">Yorumun</label>
                   <textarea
-                    required
                     value={content}
                     onChange={e => setContent(e.target.value)}
-                    placeholder="Bu etkinlik hakkında ne düşünüyorsun?"
+                    placeholder="Bu etkinlik hakkında ne düşünüyorsun? (opsiyonel)"
                     rows={3}
                     className="w-full px-4 py-3 rounded-2xl bg-surface-2 border border-border text-fg text-sm placeholder-muted focus:outline-none transition-all resize-none"
                     style={{ color: '#f0f6fc' }}
@@ -279,10 +284,10 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
                 </div>
                 <button
                   type="submit"
-                  disabled={submitting || !content.trim()}
+                  disabled={submitting}
                   className="btn-gradient w-full py-3 text-sm font-bold disabled:opacity-50"
                 >
-                  {submitting ? 'Gönderiliyor...' : 'Yorum Gönder'}
+                  {submitting ? 'Gönderiliyor...' : content.trim() ? 'Yorum Gönder' : 'Puanı Gönder'}
                 </button>
               </form>
               ) : (
