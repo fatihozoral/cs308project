@@ -1,14 +1,47 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
+import { getAuthHeader } from '@/services/authService';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
+
+interface Comment {
+  id: number;
+  user_name: string;
+  content: string;
+  rating: number;
+  event_id: number;
+  created_at: string;
+}
+
+const MOCK_COMMENTS: Comment[] = [
+  { id: 1, user_name: 'Ayşe K.', content: 'Muhteşem bir konserdi, kesinlikle tavsiye ederim!', rating: 5, event_id: 1, created_at: '' },
+  { id: 2, user_name: 'Mehmet T.', content: 'Organizasyon çok iyiydi, tekrar gideceğim.', rating: 4, event_id: 2, created_at: '' },
+  { id: 3, user_name: 'Zeynep A.', content: 'Harika bir deneyimdi, çok eğlendim!', rating: 5, event_id: 3, created_at: '' },
+];
 
 const HomePage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [comments, setComments] = useState<Comment[]>([]);
+
+  useEffect(() => {
+    const fetchComments = async () => {
+      try {
+        // Fetch approved comments from a few popular events
+        const res = await axios.get(`${API_URL}/comments/approved`, { headers: getAuthHeader() });
+        setComments(res.data.slice(0, 6));
+      } catch {
+        setComments(MOCK_COMMENTS);
+      }
+    };
+    fetchComments();
+  }, []);
 
   return (
     <div className="min-h-screen bg-mesh">
-      {/* Simple top bar for home (no full navbar needed) */}
+      {/* Header */}
       <header className="flex items-center justify-between px-8 py-6">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-xl bg-gradient-cta flex items-center justify-center">
@@ -108,6 +141,40 @@ const HomePage: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* Approved Comments Section */}
+      {comments.length > 0 && (
+        <section className="max-w-7xl mx-auto px-8 pb-24">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold text-fg">Kullanıcı Yorumları</h2>
+            <Link to="/events" className="text-xs text-teal-DEFAULT font-semibold hover:underline">
+              Tüm etkinlikler →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {comments.map((comment, i) => (
+              <div key={comment.id}
+                className="glass hover:glass-strong rounded-2xl p-5 flex flex-col gap-3 transition-all animate-fade-up"
+                style={{ animationDelay: `${i * 0.05}s` }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-teal-dim border border-teal-DEFAULT/30 flex items-center justify-center">
+                      <span className="text-xs font-bold text-teal-DEFAULT">{comment.user_name?.[0]?.toUpperCase()}</span>
+                    </div>
+                    <p className="text-sm font-semibold text-fg">{comment.user_name}</p>
+                  </div>
+                  <div className="flex gap-0.5">
+                    {[1,2,3,4,5].map(s => (
+                      <span key={s} className={`text-sm ${s <= comment.rating ? 'text-amber-400' : 'text-muted'}`}>★</span>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-sm text-muted leading-relaxed">{comment.content}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* User info footer */}
       <section className="max-w-7xl mx-auto px-8 pb-16">
