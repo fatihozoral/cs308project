@@ -25,6 +25,10 @@ const LoginPage: React.FC = () => {
       setServerError('Lütfen e-posta ve şifrenizi girin.');
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      setServerError('Geçerli bir e-posta adresi giriniz.');
+      return;
+    }
     setLoading(true);
     try {
       const response = await loginAPI(formData);
