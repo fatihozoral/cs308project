@@ -31,12 +31,39 @@ const RegisterPage: React.FC = () => {
 
   const validate = () => {
     const e: Partial<Record<keyof RegisterFormData, string>> = {};
-    if (!formData.name.trim()) e.name = 'Zorunlu alan';
-    if (!formData.email.trim()) e.email = 'Zorunlu alan';
-    if (formData.password.length < 8) e.password = 'En az 8 karakter';
-    if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Şifreler eşleşmiyor';
-    if (!formData.tax_id.trim()) e.tax_id = 'Zorunlu alan';
-    if (!formData.home_address.trim()) e.home_address = 'Zorunlu alan';
+    
+    if (!formData.name.trim()) {
+      e.name = 'Zorunlu alan';
+    } else if (!/^[a-zA-ZçÇğĞıİöÖşŞüÜ\s]{2,}$/.test(formData.name.trim())) {
+      e.name = 'Geçerli bir isim giriniz (sadece harf).';
+    }
+
+    if (!formData.email.trim()) {
+      e.email = 'Zorunlu alan';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      e.email = 'Geçerli bir e-posta adresi giriniz.';
+    }
+
+    if (!formData.password) {
+      e.password = 'Zorunlu alan';
+    } else if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(formData.password)) {
+      e.password = 'En az 8 karakter, 1 büyük harf, 1 küçük harf ve 1 rakam içermelidir.';
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      e.confirmPassword = 'Şifreler eşleşmiyor';
+    }
+
+    if (!formData.tax_id.trim()) {
+      e.tax_id = 'Zorunlu alan';
+    } else if (!/^\d{10,11}$/.test(formData.tax_id.trim())) {
+      e.tax_id = 'TC Kimlik / Vergi No 10 veya 11 haneli rakamlardan oluşmalıdır.';
+    }
+
+    if (!formData.home_address.trim()) {
+      e.home_address = 'Zorunlu alan';
+    }
+    
     setErrors(e);
     return Object.keys(e).length === 0;
   };

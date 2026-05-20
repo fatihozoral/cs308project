@@ -19,18 +19,19 @@ Bu proje, bir online biletleme sistemi için kimlik doğrulama modülünü içer
 ## 🏗️ Teknoloji Stack
 
 ### Backend
-- Node.js 20+
-- Express.js
-- PostgreSQL
-- JWT (jsonwebtoken)
-- bcrypt (şifre hashleme)
-- express-validator
+- Python 3.10+
+- FastAPI
+- Supabase (PostgreSQL)
+- Supabase Auth (JWT)
+- Pydantic
+- Uvicorn
 
 ### Frontend
-- React 18+
-- React Router v6
+- React 18+ (Vite)
+- TypeScript
+- Tailwind CSS
 - Axios
-- Context API (auth state management)
+- Context API / Supabase Session (auth state management)
 
 ---
 
@@ -39,58 +40,35 @@ Bu proje, bir online biletleme sistemi için kimlik doğrulama modülünü içer
 ```
 cs308-project/
 ├── backend/
-│   ├── src/
-│   │   ├── controllers/
-│   │   │   └── authController.js
-│   │   ├── middleware/
-│   │   │   └── authMiddleware.js
-│   │   ├── routes/
-│   │   │   └── authRoutes.js
-│   │   ├── validators/
-│   │   │   └── authValidators.js
-│   │   ├── utils/
-│   │   │   └── hashPassword.js
-│   │   ├── config/
-│   │   │   └── database.js
-│   │   ├── db/
-│   │   │   ├── migrations/
-│   │   │   │   └── 001_create_users_and_refresh_tokens.sql
-│   │   │   └── seeds/
-│   │   │       ├── 001_seed_managers.sql
-│   │   │       └── seedManagers.js
-│   │   ├── app.js
-│   │   └── server.js
-│   ├── __tests__/
-│   │   └── auth.test.js
-│   ├── package.json
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── auth.py
+│   │   │   ├── events.py
+│   │   │   ├── orders.py
+│   │   │   ├── comments.py
+│   │   │   ├── wishlist.py
+│   │   │   └── admin.py
+│   │   ├── core/
+│   │   ├── schemas/
+│   │   └── services/
+│   ├── main.py
+│   ├── requirements.txt
 │   └── .env.example
 │
 ├── frontend/
 │   ├── public/
-│   │   └── index.html
 │   ├── src/
 │   │   ├── components/
-│   │   │   └── auth/
-│   │   │       ├── LoginForm.jsx
-│   │   │       ├── RegisterForm.jsx
-│   │   │       └── AuthForms.css
 │   │   ├── pages/
-│   │   │   ├── LoginPage.jsx
-│   │   │   ├── RegisterPage.jsx
-│   │   │   ├── HomePage.jsx
-│   │   │   ├── AdminSalesPage.jsx
-│   │   │   ├── AdminProductsPage.jsx
-│   │   │   └── AuthPages.css
 │   │   ├── context/
-│   │   │   └── AuthContext.jsx
 │   │   ├── services/
-│   │   │   └── authService.js
-│   │   ├── utils/
-│   │   │   └── validators.js
-│   │   ├── App.js
-│   │   ├── index.js
+│   │   ├── types/
+│   │   ├── App.tsx
+│   │   ├── main.tsx
 │   │   └── index.css
 │   ├── package.json
+│   ├── tsconfig.json
+│   ├── vite.config.ts
 │   └── .env.example
 │
 ├── prd.md
@@ -103,70 +81,44 @@ cs308-project/
 
 ### 1. Ön Gereksinimler
 
-- Node.js 20+ ([Node.js İndir](https://nodejs.org/))
-- PostgreSQL 14+ ([PostgreSQL İndir](https://www.postgresql.org/download/))
-- npm veya yarn
+- Python 3.10+
+- Node.js 20+
+- Supabase hesabı
 
-### 2. PostgreSQL Veritabanı Kurulumu
-
-```bash
-# PostgreSQL'e bağlan
-psql -U postgres
-
-# Yeni veritabanı oluştur
-CREATE DATABASE ticketing_db;
-
-# Veritabanına geç
-\c ticketing_db
-```
-
-### 3. Backend Kurulumu
+### 2. Backend Kurulumu
 
 ```bash
 # Backend dizinine git
 cd backend
 
+# Virtual environment oluştur ve aktif et (macOS/Linux)
+python3 -m venv venv
+source venv/bin/activate
+
+# Windows için:
+# venv\Scripts\activate
+
 # Bağımlılıkları yükle
-npm install
+pip install -r requirements.txt
 
 # .env dosyasını oluştur
 cp .env.example .env
-
-# .env dosyasını düzenle (veritabanı bilgileri, JWT secret vb.)
-nano .env
 ```
 
 **.env örneği:**
 ```env
-NODE_ENV=development
-PORT=5000
-
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=ticketing_db
-DB_USER=postgres
-DB_PASSWORD=your_postgres_password
-
-JWT_SECRET=supersecretkey_change_in_production
-JWT_EXPIRES_IN=24h
-
-CORS_ORIGIN=http://localhost:3000
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_anon_key
 ```
 
 ```bash
-# Migration'ı çalıştır (tabloları oluştur)
-npm run migrate
-
-# Seed verilerini ekle (varsayılan manager hesapları)
-npm run seed
-
 # Sunucuyu başlat
-npm run dev
+uvicorn main:app --reload
 ```
 
-Backend şimdi http://localhost:5000 adresinde çalışıyor.
+Backend şimdi http://localhost:8000 adresinde çalışıyor. Swagger API dökümantasyonuna http://localhost:8000/docs adresinden ulaşabilirsiniz.
 
-### 4. Frontend Kurulumu
+### 3. Frontend Kurulumu
 
 ```bash
 # Yeni terminal penceresi aç
@@ -176,39 +128,34 @@ cd frontend
 # Bağımlılıkları yükle
 npm install
 
-# .env dosyasını oluştur (opsiyonel, proxy kullanıyoruz)
+# .env dosyasını oluştur
 cp .env.example .env
 
 # React uygulamasını başlat
-npm start
+npm run dev
 ```
 
-Frontend şimdi http://localhost:3000 adresinde çalışıyor.
+Frontend şimdi http://localhost:5173 adresinde çalışıyor.
 
 ---
 
 ## 🧪 Testleri Çalıştırma
 
-### Backend Testleri (Jest)
+### Backend Testleri (Pytest)
 
 ```bash
 cd backend
+source venv/bin/activate
 
 # Tüm testleri çalıştır
-npm test
-
-# Coverage report ile testleri çalıştır
-npm test -- --coverage
-
-# Watch modunda testleri çalıştır
-npm run test:watch
+pytest
 ```
 
 ---
 
 ## 🔑 Varsayılan Hesaplar
 
-Seed script çalıştırıldıktan sonra aşağıdaki hesaplar kullanılabilir:
+Seed script veya Supabase Auth dashboard üzerinden aşağıdaki hesaplar oluşturulabilir:
 
 | Rol | E-posta | Şifre |
 |-----|---------|-------|
@@ -221,55 +168,7 @@ Customer hesapları kayıt sayfasından oluşturulabilir.
 
 ## 📡 API Endpoints
 
-### POST /api/auth/register
-Yeni müşteri kaydı oluşturur.
-
-**Request Body:**
-```json
-{
-  "name": "Ahmet Yılmaz",
-  "email": "ahmet@example.com",
-  "password": "Sifre1234!",
-  "tax_id": "12345678901",
-  "home_address": "Kadıköy, İstanbul"
-}
-```
-
-**Response (201):**
-```json
-{
-  "message": "Kayıt başarılı.",
-  "user": {
-    "id": "uuid",
-    "name": "Ahmet Yılmaz",
-    "email": "ahmet@example.com",
-    "role": "customer"
-  }
-}
-```
-
-### POST /api/auth/login
-Kullanıcı girişi yapar.
-
-**Request Body:**
-```json
-{
-  "email": "ahmet@example.com",
-  "password": "Sifre1234!"
-}
-```
-
-**Response (200):**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "uuid",
-    "name": "Ahmet Yılmaz",
-    "role": "customer"
-  }
-}
-```
+Detaylı API endpoint'leri ve şemaları için projenin çalıştırılmasının ardından `http://localhost:8000/docs` adresini ziyaret edebilirsiniz (FastAPI Swagger UI).
 
 ---
 
@@ -277,26 +176,23 @@ Kullanıcı girişi yapar.
 
 | # | Kriter | Durum |
 |---|--------|-------|
-| AC-01 | Geçerli bilgilerle kayıt 201 dönmeli | ✅ |
-| AC-02 | Var olan e-postayla kayıt 409 dönmeli | ✅ |
-| AC-03 | Doğru kimlikle giriş JWT token dönmeli | ✅ |
+| AC-01 | Geçerli bilgilerle kayıt başarılı dönmeli | ✅ |
+| AC-02 | Var olan e-postayla kayıt hata dönmeli | ✅ |
+| AC-03 | Doğru kimlikle giriş Supabase Session dönmeli | ✅ |
 | AC-04 | Yanlış şifreyle giriş 401 dönmeli | ✅ |
 | AC-05 | Rol bazlı redirect çalışmalı | ✅ |
 | AC-06 | Boş form frontend hataları göstermeli | ✅ |
-| AC-07 | Şifre DB'de hash olarak saklanmalı | ✅ |
-| AC-08 | Token olmadan korumalı route 401 dönmeli | ✅ |
+| AC-07 | Şifre DB'de güvenli şekilde saklanmalı | ✅ |
+| AC-08 | Yetkisiz rota erişimleri engellenmeli | ✅ |
 
 ---
 
 ## 🔒 Güvenlik Özellikleri
 
-- ✅ Şifreler bcrypt ile hashleniyor (salt rounds: 10)
-- ✅ JWT token kullanımı
+- ✅ Şifreler Supabase Auth tarafından yönetilir ve hashlenir
+- ✅ Supabase JWT token kullanımı
 - ✅ CORS koruması
-- ✅ E-posta varlığı bilgisi sızdırmayan hata mesajları
-- ✅ Input validasyonu (frontend + backend)
-- ✅ SQL injection koruması (parametrized queries)
-- ✅ XSS koruması (React'in built-in escaping)
+- ✅ Input validasyonu (frontend + Pydantic backend)
 
 ---
 
@@ -330,7 +226,6 @@ Login sonrası kullanıcılar rollerine göre yönlendirilir:
 - Şifre sıfırlama özelliği henüz eklenmemiştir (Sprint 2)
 - OAuth/sosyal giriş desteklenmemektedir
 - İki faktörlü doğrulama bulunmamaktadır
-- Sales manager ve product manager hesapları sadece seed script ile oluşturulabilir
 
 ---
 

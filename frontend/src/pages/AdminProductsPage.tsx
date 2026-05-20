@@ -147,6 +147,13 @@ const AdminProductsPage: React.FC = () => {
 
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (Number(form.price) < 0) return alert('Fiyat negatif olamaz.');
+    if (Number(form.remaining_capacity) < 0) return alert('Stok negatif olamaz.');
+    
+    const eventDate = new Date(`${form.event_date}T${form.event_time}`);
+    if (eventDate < new Date()) return alert('Geçmiş tarihe etkinlik eklenemez.');
+
     try {
       const capacity = Number(form.remaining_capacity);
       await axios.post(`${API_URL}/admin/events`, {
@@ -171,6 +178,7 @@ const AdminProductsPage: React.FC = () => {
 
   const handleStockSave = async (id: number) => {
     if (!editingStock) return;
+    if (Number(editingStock.value) < 0) return alert('Stok negatif olamaz.');
     try {
       await axios.patch(`${API_URL}/admin/events/${id}`, { remaining_capacity: Number(editingStock.value) }, { headers: getAuthHeader() });
       setEvents(prev => prev.map(e => e.id === id ? { ...e, remaining_capacity: Number(editingStock.value) } : e));

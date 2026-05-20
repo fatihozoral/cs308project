@@ -21,6 +21,8 @@ const CartPage: React.FC = () => {
   const [cardName, setCardName] = useState(user?.name || '');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+  const [isFlipped, setIsFlipped] = useState(false);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
@@ -36,8 +38,85 @@ const CartPage: React.FC = () => {
   const fmtCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
   const fmtExpiry = (v: string) => { const d = v.replace(/\D/g, '').slice(0, 4); return d.length >= 3 ? d.slice(0, 2) + '/' + d.slice(2) : d; };
 
+  const getCardType = (numStr: string) => {
+    const num = numStr.replace(/\D/g, '');
+    if (/^4/.test(num)) return 'Visa';
+    if (/^5[1-5]/.test(num) || /^2(?:2(?:2[1-9]|[3-9]\d)|[3-6]\d\d|7(?:[01]\d|20))/.test(num)) return 'Mastercard';
+    if (/^3[47]/.test(num)) return 'Amex';
+    if (/^9792/.test(num)) return 'Troy';
+    return null;
+  };
+
+  const CardLogo = ({ type, className = "" }: { type: string | null, className?: string }) => {
+    if (!type) {
+      return <span className={`font-black italic text-white/90 drop-shadow-md ${className}`}>TICKET</span>;
+    }
+    
+    // Orijinal .png dosyalarının public/cards/ dizini altında olduğunu varsayıyoruz
+    return (
+      <img 
+        src={`/cards/${type.toLowerCase()}.png`} 
+        alt={`${type} Logo`} 
+        className={`object-contain ${className}`}
+        onError={(e) => {
+          // Eğer resim yüklenemezse fallback olarak isim yazsın
+          (e.target as HTMLImageElement).style.display = 'none';
+          (e.target as HTMLImageElement).parentElement?.insertAdjacentHTML('beforeend', `<span class="font-black italic text-white/90 drop-shadow-md ${className}">${type}</span>`);
+        }}
+      />
+    );
+  };
+
+  const luhnCheck = (val: string) => {
+    let sum = 0;
+    for (let i = 0; i < val.length; i++) {
+      let intVal = parseInt(val.substr(i, 1));
+      if (i % 2 === val.length % 2) {
+        intVal *= 2;
+        if (intVal > 9) intVal = 1 + (intVal % 10);
+      }
+      sum += intVal;
+    }
+    return (sum % 10) === 0;
+  };
+
+  const validatePayment = () => {
+    const errs: Record<string, string> = {};
+    const num = cardNumber.replace(/\D/g, '');
+    
+    if (!/^[a-zA-ZçÇğĞıİöÖşŞüÜ\s]+$/.test(cardName) || cardName.trim().length < 3) {
+      errs.cardName = 'Geçerli bir isim giriniz (sadece harf).';
+    }
+
+    if (num.length < 15 || num.length > 16 || !luhnCheck(num)) {
+      errs.cardNumber = 'Geçerli bir kart numarası giriniz.';
+    }
+
+    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
+      errs.expiry = 'Geçerli AA/YY giriniz.';
+    } else {
+      const [mm, yy] = expiry.split('/');
+      const month = parseInt(mm, 10);
+      const year = parseInt('20' + yy, 10);
+      const now = new Date();
+      if (year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1)) {
+        errs.expiry = 'Tarih geçmiş olamaz.';
+      }
+    }
+
+    const isAmex = getCardType(cardNumber) === 'Amex';
+    const cvvLength = isAmex ? 4 : 3;
+    if (cvv.length !== cvvLength || cvv === '000' || cvv === '0000') {
+      errs.cvv = `Geçersiz CVV (${cvvLength} hane).`;
+    }
+
+    setPaymentErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validatePayment()) return;
     if (!user) {
       navigate(`/login?redirect=${encodeURIComponent('/cart')}`);
       return;
@@ -67,7 +146,7 @@ const CartPage: React.FC = () => {
     }
   };
 
-  const inputCls = 'w-full px-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-accent transition-all';
+  const inputCls = (err?: string) => `w-full px-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all ${err ? 'border border-red-500/40' : 'focus:border-teal-accent'}`;
 
   const tr = (s: string) => s
     .replace(/ş/g,'s').replace(/Ş/g,'S')
@@ -273,26 +352,87 @@ const CartPage: React.FC = () => {
             {/* Checkout */}
             {user ? (
             <form onSubmit={handleSubmit} className="glass-strong rounded-3xl p-6 space-y-4">
-              <h2 className="font-bold text-fg">Ödeme Bilgileri</h2>
+              <h2 className="font-bold text-fg mb-2">Ödeme Bilgileri</h2>
 
-              {[
-                { label: 'Kart Sahibi', el: <input type="text" value={cardName} onChange={e => setCardName(e.target.value)} required placeholder="Ad Soyad" className={inputCls}/> },
-                { label: 'Kart Numarası', el: <input type="text" value={cardNumber} onChange={e => setCardNumber(fmtCard(e.target.value))} maxLength={19} required placeholder="0000 0000 0000 0000" className={inputCls + ' font-mono tracking-wider'}/> },
-              ].map(({ label, el }) => (
-                <div key={label} className="space-y-2">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">{label}</label>
-                  {el}
+              <div style={{ perspective: '1000px' }} className="relative w-full h-48 sm:h-56 rounded-2xl mb-8 mt-2 group">
+                <div style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }} className="w-full h-full relative transition-transform duration-700 ease-in-out">
+                  {/* Front */}
+                  <div style={{ backfaceVisibility: 'hidden' }} className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-teal-900 via-slate-900 to-teal-800 p-6 flex flex-col justify-between overflow-hidden shadow-2xl border border-teal-DEFAULT/30">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                    <div className="absolute top-[-50%] right-[-20%] w-64 h-64 bg-teal-DEFAULT/20 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute bottom-[-20%] left-[-20%] w-48 h-48 bg-teal-accent/10 rounded-full blur-2xl pointer-events-none"></div>
+                    
+                    <div className="flex justify-between items-start relative z-10">
+                      <svg className="w-10 h-10 text-amber-300/80 drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h3v3H8V8zm5 0h3v3h-3V8zm-5 5h3v3H8v-3zm5 0h3v3h-3v-3z"/>
+                      </svg>
+                      <CardLogo type={getCardType(cardNumber)} className="h-8 text-2xl" />
+                    </div>
+                    <div className="relative z-10 mt-auto">
+                      <p className="font-mono text-xl sm:text-2xl text-white tracking-widest drop-shadow-md mb-3">
+                        {cardNumber || '•••• •••• •••• ••••'}
+                      </p>
+                      <div className="flex justify-between items-end">
+                        <div className="flex flex-col">
+                          <span className="text-[9px] text-white/50 uppercase tracking-widest font-semibold mb-0.5">Kart Sahibi</span>
+                          <span className="text-sm font-semibold text-white uppercase tracking-wider truncate max-w-[160px]">
+                            {cardName || 'AD SOYAD'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className="text-[9px] text-white/50 uppercase tracking-widest font-semibold mb-0.5">Son Kullanma</span>
+                          <span className="text-sm font-semibold text-white tracking-widest">
+                            {expiry || 'AA/YY'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Back */}
+                  <div style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }} className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-slate-900 to-gray-900 flex flex-col overflow-hidden shadow-2xl border border-white/10">
+                    <div className="w-full h-10 sm:h-12 bg-black/80 mt-6 shadow-inner"></div>
+                    <div className="px-6 mt-4">
+                      <div className="w-full h-10 bg-white/10 rounded-lg flex items-center justify-end px-4 backdrop-blur-md border border-white/5">
+                        <span className="font-mono text-white text-lg tracking-widest">{cvv || '•••'}</span>
+                      </div>
+                    </div>
+                    <div className="px-6 mt-auto mb-4 text-white/30 text-[8px] uppercase tracking-widest text-center leading-relaxed">
+                      Yetkisiz kullanım yasadışıdır.<br/>Bu kart TicketHub test ortamı için sağlanmıştır.
+                    </div>
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted uppercase tracking-widest">Kart Sahibi</label>
+                <input type="text" value={cardName} onChange={e => { setCardName(e.target.value); setPaymentErrors(p => ({ ...p, cardName: '' })); }} required placeholder="Ad Soyad" className={inputCls(paymentErrors.cardName)}/>
+                {paymentErrors.cardName && <p className="text-xs text-red-400">{paymentErrors.cardName}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted uppercase tracking-widest">Kart Numarası</label>
+                <div className="relative">
+                  <input type="text" value={cardNumber} onChange={e => { setCardNumber(fmtCard(e.target.value)); setPaymentErrors(p => ({ ...p, cardNumber: '' })); }} maxLength={19} required placeholder="0000 0000 0000 0000" className={inputCls(paymentErrors.cardNumber) + ' font-mono tracking-wider pr-16'}/>
+                  {getCardType(cardNumber) && (
+                    <div className="absolute right-3 top-2.5 flex items-center justify-center pointer-events-none">
+                      <CardLogo type={getCardType(cardNumber)} className="h-6 text-teal-DEFAULT text-lg" />
+                    </div>
+                  )}
+                </div>
+                {paymentErrors.cardNumber && <p className="text-xs text-red-400">{paymentErrors.cardNumber}</p>}
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Son Kullanma</label>
-                  <input type="text" value={expiry} onChange={e => setExpiry(fmtExpiry(e.target.value))} maxLength={5} required placeholder="AA/YY" className={inputCls}/>
+                  <input type="text" value={expiry} onChange={e => { setExpiry(fmtExpiry(e.target.value)); setPaymentErrors(p => ({ ...p, expiry: '' })); }} maxLength={5} required placeholder="AA/YY" className={inputCls(paymentErrors.expiry)}/>
+                  {paymentErrors.expiry && <p className="text-xs text-red-400">{paymentErrors.expiry}</p>}
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">CVV</label>
-                  <input type="text" value={cvv} onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 3))} maxLength={3} required placeholder="•••" className={inputCls}/>
+                  <input type="text" value={cvv} onChange={e => { setCvv(e.target.value.replace(/\D/g, '').slice(0, getCardType(cardNumber) === 'Amex' ? 4 : 3)); setPaymentErrors(p => ({ ...p, cvv: '' })); }} onFocus={() => setIsFlipped(true)} onBlur={() => setIsFlipped(false)} maxLength={getCardType(cardNumber) === 'Amex' ? 4 : 3} required placeholder={getCardType(cardNumber) === 'Amex' ? "••••" : "•••"} className={inputCls(paymentErrors.cvv)}/>
+                  {paymentErrors.cvv && <p className="text-xs text-red-400">{paymentErrors.cvv}</p>}
                 </div>
               </div>
 
