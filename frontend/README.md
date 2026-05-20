@@ -17,15 +17,14 @@ Modern, type-safe frontend for the CS 308 university ticketing platform.
 - ✅ Modern, responsive UI with Tailwind CSS
 - ✅ Role-based access control (customer, sales_manager, product_manager)
 - ✅ Client-side form validation
-- ✅ Password strength indicator
 - ✅ Protected routes
 - ✅ Loading states and error handling
-- ✅ JWT token management
+- ✅ Supabase Token management
 
 ## Project Structure
 
 ```
-frontend-ts/
+frontend/
 ├── src/
 │   ├── context/
 │   │   └── AuthContext.tsx       # Auth state management
@@ -68,7 +67,7 @@ frontend-ts/
    npm run dev
    ```
 
-   The app will open at http://localhost:3000
+   The app will open at http://localhost:5173
 
 ## Available Scripts
 
@@ -87,7 +86,6 @@ frontend-ts/
 
 ### Registration Page (`/register`)
 - Full name, email, password fields
-- Password confirmation with strength indicator
 - Tax ID (11 digits)
 - Home address
 - Comprehensive validation
@@ -128,7 +126,7 @@ All forms include both client-side and server-side validation:
 
 ## API Integration
 
-The frontend connects to the backend at `http://localhost:5000/api/auth`:
+The frontend connects to the FastAPI backend at `http://localhost:8000/api/auth`:
 
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
@@ -138,7 +136,7 @@ The frontend connects to the backend at `http://localhost:5000/api/auth`:
 Create a `.env` file:
 
 ```env
-VITE_API_URL=http://localhost:5000/api/auth
+VITE_API_URL=http://localhost:8000/api/auth
 ```
 
 ## TypeScript

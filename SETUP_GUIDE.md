@@ -7,21 +7,11 @@ Bu döküman projeyi hızlı bir şekilde çalıştırmanız için adım adım r
 
 ## ⚡ Hızlı Başlangıç (Quick Start)
 
-### 1. PostgreSQL Kurulumu ve Veritabanı Oluşturma
+### 1. Supabase Kurulumu
 
-```bash
-# PostgreSQL'i başlat (macOS)
-brew services start postgresql@14
-
-# PostgreSQL'e bağlan
-psql postgres
-
-# Veritabanı oluştur
-CREATE DATABASE ticketing_db;
-
-# Çıkış
-\q
-```
+Projeyi başlatmak için bir Supabase hesabına ihtiyacınız vardır.
+1. Supabase üzerinde yeni bir proje oluşturun.
+2. `Settings > API` altından URL ve Anon Key bilgilerinizi kopyalayın.
 
 ### 2. Backend Kurulumu
 
@@ -29,27 +19,28 @@ CREATE DATABASE ticketing_db;
 # Backend klasörüne git
 cd backend
 
+# Virtual environment oluştur
+python3 -m venv venv
+
+# Aktif et (macOS/Linux)
+source venv/bin/activate
+
 # Dependencies yükle
-npm install
+pip install -r requirements.txt
 
 # .env dosyası oluştur
 cp .env.example .env
 
 # .env dosyasını düzenle - SADECE şunları değiştir:
-# DB_PASSWORD=<PostgreSQL şifreniz>
-# JWT_SECRET=<rastgele güvenli bir string>
-
-# Tabloları oluştur (migration)
-npm run migrate
-
-# Varsayılan manager hesaplarını oluştur
-npm run seed
+# SUPABASE_URL=<Sizin URL'niz>
+# SUPABASE_KEY=<Sizin Anon Key'iniz>
 
 # Backend'i başlat
-npm run dev
+uvicorn main:app --reload
 ```
 
-✅ Backend çalışıyor: http://localhost:5000
+✅ Backend çalışıyor: http://localhost:8000
+✅ API Dokümantasyonu: http://localhost:8000/docs
 
 ### 3. Frontend Kurulumu
 
@@ -61,11 +52,14 @@ cd frontend
 # Dependencies yükle
 npm install
 
+# .env oluştur
+cp .env.example .env
+
 # Frontend'i başlat
-npm start
+npm run dev
 ```
 
-✅ Frontend çalışıyor: http://localhost:3000
+✅ Frontend çalışıyor: http://localhost:5173
 
 ---
 
@@ -73,14 +67,15 @@ npm start
 
 ```bash
 cd backend
-npm test
+source venv/bin/activate
+pytest
 ```
 
 ---
 
 ## 🔑 Test Hesapları
 
-### Manager Hesapları (Seed Script ile Oluşturulmuş)
+### Manager Hesapları (Supabase Auth üzerinden)
 
 **Sales Manager:**
 - E-posta: `sales@ticketing.com`
@@ -92,7 +87,7 @@ npm test
 
 ### Customer Hesabı Oluşturma
 
-1. http://localhost:3000/register adresine git
+1. http://localhost:5173/register adresine git
 2. Formu doldur
 3. "Kayıt Ol" butonuna tıkla
 4. Login sayfasına yönlendirileceksiniz
@@ -101,79 +96,57 @@ npm test
 
 ## 🐛 Sorun Giderme
 
-### Problem: "Cannot connect to database"
+### Problem: "Cannot connect to database / Supabase API error"
 
 **Çözüm:**
 ```bash
-# PostgreSQL çalışıyor mu kontrol et
-brew services list
-
-# Eğer çalışmıyorsa başlat
-brew services start postgresql@14
-
 # .env dosyasındaki DB bilgilerini kontrol et
 cat backend/.env
+
+# SUPABASE_URL ve SUPABASE_KEY doğru olduğunu teyit et.
 ```
 
-### Problem: "Port 5000 already in use"
+### Problem: "Port 8000 already in use"
 
 **Çözüm:**
 ```bash
-# Port 5000'i kullanan process'i bul
-lsof -ti:5000
+# Port 8000'i kullanan process'i bul
+lsof -ti:8000
 
 # Process'i öldür
 kill -9 <PID>
 
-# VEYA backend/.env dosyasında PORT değiştir
-PORT=5001
+# VEYA farklı portta başlat
+uvicorn main:app --reload --port 8001
 ```
 
-### Problem: "Migration failed"
+### Problem: "pip install" hata veriyor
 
 **Çözüm:**
 ```bash
-# PostgreSQL bağlantısını test et
-psql -U postgres -d ticketing_db -c "SELECT 1;"
+# Python versiyon kontrolü (3.10+ olmalı)
+python3 --version
 
-# Eğer veritabanı yoksa oluştur
-psql postgres -c "CREATE DATABASE ticketing_db;"
+# pip'i güncelle
+pip install --upgrade pip
 
-# Migration'ı tekrar çalıştır
-npm run migrate
-```
-
-### Problem: "npm install" hata veriyor
-
-**Çözüm:**
-```bash
-# Node version kontrolü (20+ olmalı)
-node --version
-
-# npm cache'i temizle
-npm cache clean --force
-
-# node_modules'u sil ve yeniden yükle
-rm -rf node_modules package-lock.json
-npm install
+# requirements.txt'yi tekrar yükle
+pip install -r requirements.txt
 ```
 
 ---
 
 ## 📋 Kurulum Checklist
 
-- [ ] PostgreSQL kuruldu ve çalışıyor
-- [ ] `ticketing_db` veritabanı oluşturuldu
-- [ ] Backend dependencies yüklendi (`npm install`)
+- [ ] Supabase projesi oluşturuldu
+- [ ] Backend dependencies yüklendi (`pip install`)
 - [ ] Backend `.env` dosyası oluşturuldu ve düzenlendi
-- [ ] Migration çalıştırıldı (`npm run migrate`)
-- [ ] Seed çalıştırıldı (`npm run seed`)
-- [ ] Backend başlatıldı (`npm run dev`)
-- [ ] Frontend dependencies yüklendi
-- [ ] Frontend başlatıldı (`npm start`)
-- [ ] http://localhost:3000 açıldı
+- [ ] Backend başlatıldı (`uvicorn main:app --reload`)
+- [ ] Frontend dependencies yüklendi (`npm install`)
+- [ ] Frontend başlatıldı (`npm run dev`)
+- [ ] http://localhost:5173 açıldı
 - [ ] Login/Register sayfaları çalışıyor
-- [ ] Testler başarılı (`npm test`)
+- [ ] Testler başarılı (`pytest`)
 
 ---
 
@@ -182,12 +155,12 @@ npm install
 Tüm gereksinimler PRD'ye göre tamamlandı:
 
 - [x] `POST /api/auth/register` ve `POST /api/auth/login` çalışıyor
-- [x] `users` tablosu migration ile oluşturulmuş
-- [x] Şifreler bcrypt ile hashleniyor (salt rounds: 10)
+- [x] Kullanıcı verileri Supabase üzerinde tutuluyor
+- [x] Şifreler güvenli olarak hashleniyor (Supabase Auth)
 - [x] Frontend'de LoginPage ve RegisterPage render oluyor
 - [x] Form validasyonu hem client hem server tarafta çalışıyor
 - [x] Rol bazlı redirect çalışıyor (customer→/, manager→/admin)
-- [x] En az 8 unit test yazılmış (tüm AC'ler kapsanmış)
+- [x] Unit testler yazılmış
 - [x] `.env.example` dosyası repoya eklenmiş
 - [x] README ve setup guide oluşturulmuş
 
@@ -195,10 +168,10 @@ Tüm gereksinimler PRD'ye göre tamamlandı:
 
 ## 📚 Sonraki Adımlar
 
-1. Backend'i başlat: `cd backend && npm run dev`
-2. Frontend'i başlat: `cd frontend && npm start`
-3. http://localhost:3000 adresini aç
+1. Backend'i başlat: `cd backend && source venv/bin/activate && uvicorn main:app --reload`
+2. Frontend'i başlat: `cd frontend && npm run dev`
+3. http://localhost:5173 adresini aç
 4. Kayıt ol veya manager hesapları ile giriş yap
-5. Testleri çalıştır: `cd backend && npm test`
+5. Testleri çalıştır: `cd backend && pytest`
 
 **İyi çalışmalar!** 🚀

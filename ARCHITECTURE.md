@@ -6,15 +6,15 @@
 
 ## 🏗️ High-Level Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                          CLIENT LAYER                            │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │                   React Frontend                         │   │
-│  │                  (Port 3000)                             │   │
+│  │                  (Port 5173)                             │   │
 │  │                                                           │   │
 │  │  • LoginPage / RegisterPage                              │   │
-│  │  • AuthContext (Global State)                            │   │
+│  │  • AuthContext (Global State via Supabase)               │   │
 │  │  • Protected Routes                                       │   │
 │  │  • Client-side Validation                                │   │
 │  └──────────────────┬──────────────────────────────────────┘   │
@@ -26,8 +26,8 @@
 ┌─────────────────────┼──────────────────────────────────────────┐
 │                     │         SERVER LAYER                       │
 │  ┌──────────────────▼──────────────────────────────────────┐   │
-│  │              Express.js Backend                          │   │
-│  │                (Port 5000)                               │   │
+│  │              FastAPI Backend                             │   │
+│  │                (Port 8000)                               │   │
 │  │                                                           │   │
 │  │  ┌────────────────────────────────────────────────┐    │   │
 │  │  │          API Endpoints                         │    │   │
@@ -36,51 +36,41 @@
 │  │  └────────────────┬───────────────────────────────┘    │   │
 │  │                   │                                      │   │
 │  │  ┌────────────────▼───────────────────────────────┐    │   │
-│  │  │          Middleware Layer                      │    │   │
-│  │  │  • CORS                                         │    │   │
-│  │  │  • Body Parser                                  │    │   │
-│  │  │  • Request Validation (express-validator)      │    │   │
-│  │  │  • Auth Middleware (JWT verification)          │    │   │
+│  │  │          Middleware/Dependencies Layer         │    │   │
+│  │  │  • CORS Middleware                              │    │   │
+│  │  │  • Request Validation (Pydantic)               │    │   │
+│  │  │  • Auth Dependencies (Supabase Session check)  │    │   │
 │  │  └────────────────┬───────────────────────────────┘    │   │
 │  │                   │                                      │   │
 │  │  ┌────────────────▼───────────────────────────────┐    │   │
-│  │  │          Controllers                           │    │   │
-│  │  │  • authController.register()                   │    │   │
-│  │  │  • authController.login()                      │    │   │
+│  │  │          Controllers (Routers)                 │    │   │
+│  │  │  • auth.py (register/login logic)              │    │   │
 │  │  └────────────────┬───────────────────────────────┘    │   │
 │  │                   │                                      │   │
 │  │  ┌────────────────▼───────────────────────────────┐    │   │
-│  │  │          Utilities                             │    │   │
-│  │  │  • hashPassword() - bcrypt                     │    │   │
-│  │  │  • comparePassword() - bcrypt                  │    │   │
-│  │  │  • jwt.sign() - token generation               │    │   │
+│  │  │          Services                              │    │   │
+│  │  │  • supabase_service.py                         │    │   │
 │  │  └────────────────┬───────────────────────────────┘    │   │
 │  └───────────────────┼──────────────────────────────────────┘   │
 └────────────────────┼─────────────────────────────────────────┘
                      │
-                     │ SQL Queries
-                     │ (Parameterized)
+                     │ REST API
                      │
 ┌────────────────────▼─────────────────────────────────────────┐
-│                    DATABASE LAYER                             │
+│                    DATABASE & AUTH LAYER                      │
 │  ┌──────────────────────────────────────────────────────┐   │
-│  │              PostgreSQL Database                      │   │
-│  │                (Port 5432)                            │   │
+│  │              Supabase (PostgreSQL + Auth)             │   │
 │  │                                                        │   │
 │  │  ┌──────────────────────────────────────────────┐   │   │
-│  │  │  users table                                  │   │   │
-│  │  │  • id (UUID, PK)                              │   │   │
-│  │  │  • name, email, password_hash                 │   │   │
-│  │  │  • tax_id, home_address                       │   │   │
-│  │  │  • role (customer/sales_manager/...)          │   │   │
-│  │  │  • is_active, created_at, updated_at          │   │   │
+│  │  │  auth.users table                             │   │   │
+│  │  │  • Handles authentication, sessions           │   │   │
+│  │  │  • Password hashing & security                │   │   │
 │  │  └──────────────────────────────────────────────┘   │   │
 │  │                                                        │   │
 │  │  ┌──────────────────────────────────────────────┐   │   │
-│  │  │  refresh_tokens table (optional)              │   │   │
-│  │  │  • id (UUID, PK)                              │   │   │
-│  │  │  • user_id (FK → users.id)                    │   │   │
-│  │  │  • token_hash, expires_at                     │   │   │
+│  │  │  public.profiles (metadata)                   │   │   │
+│  │  │  • id (UUID, PK, FK -> auth.users)            │   │   │
+│  │  │  • name, role, address                        │   │   │
 │  │  └──────────────────────────────────────────────┘   │   │
 │  └──────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
@@ -92,7 +82,7 @@
 
 ### Registration Flow
 
-```
+```text
 ┌─────────┐                                  ┌─────────┐
 │         │  1. Fill registration form       │         │
 │  User   ├─────────────────────────────────►│ React   │
@@ -104,14 +94,14 @@
                                                    │
                                               ┌────▼────┐
                                               │validators│
-                                              │.js      │
+                                              │.ts      │
                                               └────┬────┘
                                                    │
                                                    │ 3. POST /api/auth/register
                                                    │    {name, email, password, ...}
                                                    │
                                               ┌────▼────────┐
-                                              │   Express   │
+                                              │   FastAPI   │
                                               │   Backend   │
                                               └────┬────────┘
                                                    │
@@ -119,50 +109,41 @@
                                                    │    validation
                                                    │
                                               ┌────▼────────┐
-                                              │ express-    │
-                                              │ validator   │
+                                              │ Pydantic    │
+                                              │ Schemas     │
                                               └────┬────────┘
                                                    │
-                                                   │ 5. Check email
-                                                   │    uniqueness
+                                                   │ 5. Call Supabase Auth
                                                    │
                                               ┌────▼────────┐
-                                              │ PostgreSQL  │
-                                              │ SELECT      │
+                                              │ Supabase    │
+                                              │ sign_up()   │
                                               └────┬────────┘
                                                    │
-                                                   │ Email exists?
+                                                   │ Success?
                                          ┌─────────┴─────────┐
                                          │                   │
                                     Yes  │                   │ No
                                          ▼                   ▼
                                   ┌──────────┐        ┌──────────┐
-                                  │ Return   │        │ Hash     │
-                                  │ 409      │        │ password │
-                                  │ Conflict │        │ (bcrypt) │
-                                  └──────────┘        └────┬─────┘
-                                                           │
-                                                           │ 6. Insert user
-                                                           │
-                                                      ┌────▼────────┐
-                                                      │ PostgreSQL  │
-                                                      │ INSERT INTO │
-                                                      │ users       │
-                                                      └────┬────────┘
-                                                           │
-                                                           │ 7. Return 201
-                                                           │    with user data
-                                                           │
-                                                      ┌────▼────────┐
-                                                      │   React     │
-                                                      │   Success   │
-                                                      │   Message   │
-                                                      └─────────────┘
+                                  │ Save     │        │ Return   │
+                                  │ User Data│        │ Error    │
+                                  │          │        │ (409/400)│
+                                  └────┬─────┘        └──────────┘
+                                       │
+                                       │ 6. Return 201
+                                       │    with user data
+                                       │
+                                  ┌────▼────────┐
+                                  │   React     │
+                                  │   Success   │
+                                  │   Message   │
+                                  └─────────────┘
 ```
 
 ### Login Flow
 
-```
+```text
 ┌─────────┐                                  ┌─────────┐
 │         │  1. Enter credentials            │         │
 │  User   ├─────────────────────────────────►│ React   │
@@ -176,187 +157,41 @@
                                                    │    {email, password}
                                                    │
                                               ┌────▼────────┐
-                                              │   Express   │
+                                              │   FastAPI   │
                                               │   Backend   │
                                               └────┬────────┘
                                                    │
-                                                   │ 4. Find user by email
+                                                   │ 4. Call Supabase Auth
                                                    │
                                               ┌────▼────────┐
-                                              │ PostgreSQL  │
-                                              │ SELECT      │
+                                              │ Supabase    │
+                                              │ sign_in()   │
                                               └────┬────────┘
                                                    │
-                                                   │ User found?
+                                                   │ Success?
                                          ┌─────────┴─────────┐
                                          │                   │
                                     No   │                   │ Yes
                                          ▼                   ▼
                                   ┌──────────┐        ┌──────────┐
-                                  │ Return   │        │ Check    │
-                                  │ 401      │        │ is_active│
-                                  │ Error    │        └────┬─────┘
-                                  └──────────┘             │
-                                                           │ Active?
-                                                   ┌───────┴───────┐
-                                                   │               │
-                                              No   │               │ Yes
-                                                   ▼               ▼
-                                            ┌──────────┐    ┌──────────┐
-                                            │ Return   │    │ Compare  │
-                                            │ 403      │    │ password │
-                                            │ Disabled │    │ (bcrypt) │
-                                            └──────────┘    └────┬─────┘
-                                                                 │
-                                                                 │ Match?
-                                                       ┌─────────┴─────────┐
-                                                       │                   │
-                                                  No   │                   │ Yes
-                                                       ▼                   ▼
-                                                ┌──────────┐        ┌──────────┐
-                                                │ Return   │        │ Generate │
-                                                │ 401      │        │ JWT      │
-                                                │ Error    │        │ Token    │
-                                                └──────────┘        └────┬─────┘
-                                                                         │
-                                                                         │ 5. Return token
-                                                                         │    and user data
-                                                                         │
-                                                                    ┌────▼────────┐
-                                                                    │ AuthContext │
-                                                                    │ .login()    │
-                                                                    └────┬────────┘
-                                                                         │
-                                                                         │ 6. Store token
-                                                                         │    in localStorage
-                                                                         │
-                                                                         │ 7. Redirect by role
-                                                                         │
-                                                                    ┌────▼────────┐
-                                                                    │ Navigate to │
-                                                                    │ home page   │
-                                                                    └─────────────┘
-```
-
-### Protected Route Access Flow
-
-```
-┌─────────┐                                  ┌─────────┐
-│         │  1. Navigate to /admin/sales     │         │
-│  User   ├─────────────────────────────────►│ React   │
-│         │                                   │ Router  │
-└─────────┘                                   └────┬────┘
-                                                   │
-                                                   │ 2. Check auth
-                                                   │    state
-                                                   │
-                                              ┌────▼────────┐
-                                              │ AuthContext │
-                                              │ .user       │
-                                              └────┬────────┘
-                                                   │
-                                                   │ Authenticated?
-                                         ┌─────────┴─────────┐
-                                         │                   │
-                                    No   │                   │ Yes
-                                         ▼                   ▼
-                                  ┌──────────┐        ┌──────────┐
-                                  │ Redirect │        │ Make API │
-                                  │ to       │        │ request  │
-                                  │ /login   │        │ with     │
-                                  └──────────┘        │ token    │
-                                                      └────┬─────┘
+                                  │ Return   │        │ Return   │
+                                  │ 401      │        │ Session  │
+                                  │ Error    │        │ Token    │
+                                  └──────────┘        └────┬─────┘
                                                            │
-                                                           │ 3. API request with
-                                                           │    Authorization: Bearer <token>
+                                                           │ 5. Store session
                                                            │
                                                       ┌────▼────────┐
-                                                      │ Express     │
-                                                      │ authMiddle- │
-                                                      │ ware        │
+                                                      │ AuthContext │
+                                                      │ .login()    │
                                                       └────┬────────┘
                                                            │
-                                                           │ 4. Verify JWT
+                                                           │ 6. Redirect by role
                                                            │
                                                       ┌────▼────────┐
-                                                      │ jwt.verify()│
-                                                      └────┬────────┘
-                                                           │
-                                                           │ Valid token?
-                                                   ┌───────┴───────┐
-                                                   │               │
-                                              No   │               │ Yes
-                                                   ▼               ▼
-                                            ┌──────────┐    ┌──────────┐
-                                            │ Return   │    │ Add user │
-                                            │ 401      │    │ to req   │
-                                            │ Unauthorized   │ .user    │
-                                            └──────────┘    └────┬─────┘
-                                                                 │
-                                                                 │ 5. Execute
-                                                                 │    controller
-                                                                 │
-                                                            ┌────▼────────┐
-                                                            │ Return data │
-                                                            │ to client   │
-                                                            └─────────────┘
-```
-
----
-
-## 📊 Data Flow Diagram
-
-### User Registration Data Flow
-
-```
-┌────────────┐    ┌────────────┐    ┌────────────┐    ┌────────────┐
-│  Register  │───►│  Validate  │───►│   Hash     │───►│  Store in  │
-│   Form     │    │   Input    │    │  Password  │    │  Database  │
-└────────────┘    └────────────┘    └────────────┘    └────────────┘
-     │                  │                  │                  │
-     ▼                  ▼                  ▼                  ▼
-  User Input      Client + Server      bcrypt.hash()    PostgreSQL
-  {name,          Validation           (salt: 10)       INSERT
-   email,         Rules                                  INTO users
-   password,
-   tax_id,
-   address}
-```
-
-### JWT Token Structure
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        JWT TOKEN                             │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  HEADER                                                      │
-│  {                                                           │
-│    "alg": "HS256",                                          │
-│    "typ": "JWT"                                             │
-│  }                                                           │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  PAYLOAD                                                     │
-│  {                                                           │
-│    "sub": "user-uuid-here",        ← User ID                │
-│    "email": "user@example.com",    ← User email             │
-│    "role": "customer",             ← User role              │
-│    "iat": 1711234567,              ← Issued at              │
-│    "exp": 1711320967               ← Expires (24h)          │
-│  }                                                           │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  SIGNATURE                                                   │
-│  HMACSHA256(                                                │
-│    base64UrlEncode(header) + "." +                         │
-│    base64UrlEncode(payload),                               │
-│    JWT_SECRET                      ← From .env             │
-│  )                                                           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+                                                      │ Navigate to │
+                                                      │ home page   │
+                                                      └─────────────┘
 ```
 
 ---
@@ -365,8 +200,8 @@
 
 ### Frontend Component Tree
 
-```
-App.js (Router + AuthProvider)
+```text
+App.tsx (Router + AuthProvider)
 │
 ├─ AuthProvider (Context)
 │  │
@@ -374,202 +209,78 @@ App.js (Router + AuthProvider)
 │  │  │
 │  │  ├─ LoginPage
 │  │  │  └─ LoginForm
-│  │  │     ├─ Email Input
-│  │  │     ├─ Password Input
-│  │  │     └─ Submit Button
 │  │  │
 │  │  └─ RegisterPage
 │  │     └─ RegisterForm
-│  │        ├─ Name Input
-│  │        ├─ Email Input
-│  │        ├─ Password Input
-│  │        ├─ Confirm Password Input
-│  │        ├─ Tax ID Input
-│  │        ├─ Address Textarea
-│  │        └─ Submit Button
 │  │
 │  └─ ProtectedRoute
 │     │
 │     ├─ HomePage
-│     │  ├─ Header (with logout)
 │     │  └─ Customer Content
 │     │
 │     ├─ AdminSalesPage
-│     │  ├─ Header (with logout)
 │     │  └─ Sales Manager Content
 │     │
 │     └─ AdminProductsPage
-│        ├─ Header (with logout)
 │        └─ Product Manager Content
 ```
 
 ### Backend Module Structure
 
-```
-app.js (Express Application)
+```text
+main.py (FastAPI Application)
 │
 ├─ Middleware Stack
-│  ├─ CORS
-│  ├─ Body Parser (JSON)
-│  └─ Request Logger (dev)
+│  └─ CORS Middleware
 │
-├─ Routes
+├─ Routers (app/api/)
 │  │
-│  └─ /api/auth
+│  └─ auth.py
 │     │
 │     ├─ POST /register
-│     │  ├─ registerValidationRules
-│     │  ├─ validate
-│     │  └─ authController.register
-│     │
 │     └─ POST /login
-│        ├─ loginValidationRules
-│        ├─ validate
-│        └─ authController.login
 │
-└─ Error Handlers
-   ├─ 404 Handler
-   └─ Global Error Handler
-```
-
----
-
-## 🔄 State Management
-
-### Auth Context State
-
-```
-AuthContext
+├─ Core (app/core/)
+│  └─ security.py (Dependencies)
 │
-├─ State
-│  ├─ user: {id, name, role} | null
-│  └─ loading: boolean
-│
-├─ Methods
-│  ├─ login(token, userData)
-│  │  ├─ Save to localStorage
-│  │  ├─ Update state
-│  │  └─ Set axios header
-│  │
-│  ├─ logout()
-│  │  ├─ Remove from localStorage
-│  │  ├─ Clear state
-│  │  └─ Clear axios header
-│  │
-│  ├─ isAuthenticated()
-│  │  └─ Check user && token exists
-│  │
-│  └─ getRedirectPath(role)
-│     ├─ customer → /
-│     ├─ sales_manager → /admin/sales
-│     └─ product_manager → /admin/products
-│
-└─ Effects
-   └─ useEffect (on mount)
-      ├─ Load token from localStorage
-      ├─ Load user from localStorage
-      └─ Restore auth state
+└─ Services (app/services/)
+   └─ supabase_service.py
 ```
 
 ---
 
 ## 🔐 Security Layers
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     SECURITY LAYERS                          │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  Layer 1: Client-Side Validation                            │
 │  • Input format validation                                  │
-│  • Password strength check                                  │
-│  • Required field check                                     │
-│  • Immediate user feedback                                  │
 │                                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  Layer 2: Server-Side Validation                            │
-│  • express-validator rules                                  │
-│  • Sanitization (trim, normalizeEmail)                     │
-│  • Business logic validation                                │
+│  • Pydantic Schemas                                         │
 │  • Never trust client input                                 │
 │                                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  Layer 3: Authentication                                     │
-│  • JWT token generation                                     │
-│  • Token expiration (24h)                                   │
-│  • Secure token storage                                     │
-│  • Authorization header validation                          │
+│  • Supabase Auth Sessions                                   │
+│  • Secure token handling                                    │
 │                                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  Layer 4: Password Security                                  │
-│  • bcrypt hashing (salt rounds: 10)                        │
-│  • No plaintext storage                                     │
-│  • Secure comparison (timing attack resistant)             │
-│  • Strong password requirements                             │
+│  • Hashing managed by Supabase securely                     │
+│  • No plaintext storage anywhere                            │
 │                                                              │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
 │  Layer 5: Database Security                                  │
-│  • Parameterized queries (SQL injection prevention)        │
-│  • Connection pooling                                       │
-│  • Access control (user permissions)                       │
-│  • Data encryption at rest (production)                    │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Layer 6: Transport Security                                 │
-│  • HTTPS (production)                                       │
-│  • CORS configuration                                       │
-│  • Secure headers                                           │
-│  • Rate limiting (future)                                   │
+│  • Supabase Row Level Security (RLS)                        │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 📝 Error Handling Flow
-
-```
-┌─────────────┐
-│   Client    │
-│   Request   │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────┐
-│ Input Validation│────► Validation Error ────► 400 Bad Request
-└──────┬──────────┘
-       │
-       ▼
-┌─────────────────┐
-│ Business Logic  │────► Logic Error ────────► 409 Conflict
-└──────┬──────────┘      (e.g., email exists)
-       │
-       ▼
-┌─────────────────┐
-│ Authentication  │────► Auth Error ─────────► 401 Unauthorized
-└──────┬──────────┘      (wrong password)
-       │
-       ▼
-┌─────────────────┐
-│ Authorization   │────► Authz Error ────────► 403 Forbidden
-└──────┬──────────┘      (inactive account)
-       │
-       ▼
-┌─────────────────┐
-│ Database Query  │────► DB Error ───────────► 500 Server Error
-└──────┬──────────┘      (connection failed)
-       │
-       ▼
-┌─────────────────┐
-│ Success Response│────► 200 OK / 201 Created
-└─────────────────┘
-```
-
----
-
-This architecture document provides a comprehensive visual understanding of how all components work together in the CS 308 authentication system.

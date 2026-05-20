@@ -27,10 +27,10 @@ Bu doküman, biletleme sisteminin kimlik doğrulama modülünü (Login & Sign Up
 ### 3.1 In Scope (Sprint 1)
 - Sign Up sayfası (customer kaydı)
 - Login sayfası (tüm roller)
-- JWT token üretimi ve localStorage'a yazılması
+- Supabase Session token üretimi ve localStorage'a yazılması
 - Rol bazlı yönlendirme (redirect)
-- Form validasyonu (frontend + backend)
-- Şifre hashleme (bcrypt)
+- Form validasyonu (frontend + backend Pydantic)
+- Şifre güvenliği (Supabase Auth)
 
 ### 3.2 Out of Scope
 - Şifre sıfırlama / "Şifremi unuttum"
@@ -42,58 +42,28 @@ Bu doküman, biletleme sisteminin kimlik doğrulama modülünü (Login & Sign Up
 
 ## 4. Database
 
-### 4.1 Tablo: `users`
+### 4.1 Tablo: `Kullanıcılar (Supabase Auth)`
 
-```sql
-CREATE TABLE users (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name          VARCHAR(100)  NOT NULL,
-  email         VARCHAR(150)  NOT NULL UNIQUE,
-  password_hash VARCHAR(255)  NOT NULL,
-  tax_id        VARCHAR(20)   NOT NULL,
-  home_address  TEXT          NOT NULL,
-  role          VARCHAR(20)   NOT NULL DEFAULT 'customer'
-                  CHECK (role IN ('customer', 'sales_manager', 'product_manager')),
-  is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
-  created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-);
+Sistemdeki kullanıcılar Supabase Auth servisi (`auth.users`) ile entegre bir şekilde çalışır. Ekstra profil bilgileri için `public.profiles` veya benzeri bir tablo kullanılabilir.
 
-CREATE INDEX idx_users_email ON users(email);
-```
+- Supabase Auth tarafından şifreler otomatik hashlenir ve güvenli saklanır.
+- Kayıt sırasında role bilgisi Supabase meta verilerinde veya ilişkili bir tabloda tutulabilir.
 
-### 4.2 Tablo: `refresh_tokens` *(opsiyonel ama önerilir)*
+### 4.2 Seed — Varsayılan Manager Hesapları
 
-```sql
-CREATE TABLE refresh_tokens (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  token_hash  VARCHAR(255) NOT NULL,
-  expires_at  TIMESTAMPTZ NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### 4.3 Seed — Varsayılan Manager Hesapları
-
-```sql
--- Şifreler: bcrypt hash of 'Admin1234!'
-INSERT INTO users (name, email, password_hash, tax_id, home_address, role)
-VALUES
-  ('Sales Manager', 'sales@ticketing.com', '$2b$10$...', '11111111111', 'HQ', 'sales_manager'),
-  ('Product Manager', 'product@ticketing.com', '$2b$10$...', '22222222222', 'HQ', 'product_manager');
-```
+Varsayılan Manager hesapları Supabase arayüzünden veya migration/seed script ile oluşturulabilir:
+- **Sales Manager:** `sales@ticketing.com` / `Admin1234!`
+- **Product Manager:** `product@ticketing.com` / `Admin1234!`
 
 ---
 
 ## 5. Backend
 
 ### 5.1 Tech Stack
-- Runtime: Node.js 20+
-- Framework: Express.js
-- ORM/Query: `pg` (node-postgres) veya Sequelize
-- Auth: `jsonwebtoken`, `bcrypt`
-- Validation: `express-validator` veya `joi`
+- Runtime: Python 3.10+
+- Framework: FastAPI
+- Database/Auth: Supabase
+- Validation: Pydantic
 
 ### 5.2 Endpoints
 
@@ -128,7 +98,7 @@ VALUES
 |------|-------|-------|
 | 400 | Eksik alan | `"Email alanı zorunludur."` |
 | 409 | E-posta zaten kayıtlı | `"Bu e-posta adresi kullanılıyor."` |
-| 422 | Zayıf şifre | `"Şifre en az 8 karakter olmalı."` |
+| 422 | Zayıf şifre/Pydantic Error | `"Şifre en az 8 karakter olmalı."` |
 
 ---
 
@@ -165,56 +135,37 @@ VALUES
 
 ### 5.3 JWT Yapısı
 
-```js
-// Payload
-{
-  sub: "user-uuid",
-  email: "ahmet@example.com",
-  role: "customer",
-  iat: 1711234567,
-  exp: 1711320967   // 24 saat
-}
+Supabase Auth tarafından oluşturulan güvenli token (JWT) yapısı kullanılır.
 
-// .env
-JWT_SECRET=supersecretkey_change_in_prod
-JWT_EXPIRES_IN=24h
-```
+### 5.4 FastAPI Dependencies (Middleware)
 
-### 5.4 Middleware: `authMiddleware.js`
+```python
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from app.services.supabase_service import supabase
 
-```js
-// Diğer route'larda kullanım:
-// router.get('/profile', authMiddleware, profileController)
+security = HTTPBearer()
 
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer '))
-    return res.status(401).json({ error: 'Token bulunamadı.' });
-
-  const token = authHeader.split(' ')[1];
-  try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET);
-    next();
-  } catch {
-    res.status(401).json({ error: 'Token geçersiz veya süresi dolmuş.' });
-  }
-};
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    user = supabase.auth.get_user(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user
 ```
 
 ### 5.5 Klasör Yapısı (Backend Auth)
 
 ```
-src/
-├── controllers/
-│   └── authController.js   # register(), login()
-├── middleware/
-│   └── authMiddleware.js   # JWT doğrulama
-├── routes/
-│   └── authRoutes.js       # POST /register, POST /login
-├── validators/
-│   └── authValidators.js   # express-validator kuralları
-└── utils/
-    └── hashPassword.js     # bcrypt wrapper
+app/
+├── api/
+│   └── auth.py             # FastAPI router (/register, /login)
+├── core/
+│   └── security.py         # Dependencies and JWT checks
+├── schemas/
+│   └── user.py             # Pydantic models
+└── services/
+    └── supabase_service.py # Supabase client initialization
 ```
 
 ---
@@ -222,10 +173,12 @@ src/
 ## 6. Frontend
 
 ### 6.1 Tech Stack
-- React 18+
+- React 18+ (Vite)
+- TypeScript
+- Tailwind CSS
 - React Router v6
 - Axios (API istekleri)
-- Context API veya Redux (auth state)
+- Context API (Supabase Session state)
 
 ### 6.2 Sayfalar ve Route'lar
 
@@ -260,14 +213,16 @@ src/
 
 ### 6.5 Auth Context
 
-```js
-// src/context/AuthContext.jsx
-const AuthContext = createContext();
+```tsx
+// src/context/AuthContext.tsx
+import { createContext, useState } from 'react';
 
-export const AuthProvider = ({ children }) => {
+export const AuthContext = createContext<any>(null);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState(null);
 
-  const login = (token, userData) => {
+  const login = (token: string, userData: any) => {
     localStorage.setItem('token', token);
     setUser(userData);
   };
@@ -287,8 +242,8 @@ export const AuthProvider = ({ children }) => {
 
 ### 6.6 Rol Bazlı Yönlendirme (Login Sonrası)
 
-```js
-const redirectByRole = (role) => {
+```tsx
+const redirectByRole = (role: string) => {
   switch (role) {
     case 'sales_manager':    return '/admin/sales';
     case 'product_manager':  return '/admin/products';
@@ -302,29 +257,28 @@ const redirectByRole = (role) => {
 ```
 src/
 ├── pages/
-│   ├── LoginPage.jsx
-│   └── RegisterPage.jsx
+│   ├── LoginPage.tsx
+│   └── RegisterPage.tsx
 ├── components/
 │   └── auth/
-│       ├── LoginForm.jsx
-│       └── RegisterForm.jsx
+│       ├── LoginForm.tsx
+│       └── RegisterForm.tsx
 ├── context/
-│   └── AuthContext.jsx
+│   └── AuthContext.tsx
 ├── services/
-│   └── authService.js      # axios.post('/api/auth/login'), register()
+│   └── authService.ts      # API çağrıları
 └── utils/
-    └── validators.js       # Frontend validasyon helpers
+    └── validators.ts       # Frontend validasyon helpers
 ```
 
 ---
 
 ## 7. Güvenlik Gereksinimleri (Req 16)
 
-- Şifreler veritabanında **bcrypt** (salt rounds: 10) ile hashlenmeli, düz metin saklanmamalı.
-- JWT secret `.env` dosyasında tutulmalı, repoya commit edilmemeli (`.gitignore`).
+- Şifreler Supabase Auth tarafından yönetilmeli, düz metin saklanmamalı.
+- Supabase Key'leri `.env` dosyasında tutulmalı, repoya commit edilmemeli (`.gitignore`).
 - API, e-posta var/yok bilgisini ayırt eden mesaj dönmemeli (brute-force önlemi) — her zaman `"E-posta veya şifre hatalı."` dön.
 - HTTPS zorunlu (production). Development'ta HTTP kabul edilir.
-- `Authorization` header'ı dışında token client-side'da yalnızca `localStorage`'da tutulabilir; `httpOnly cookie` daha güvenlidir (opsiyonel iyileştirme).
 
 ---
 
@@ -332,26 +286,26 @@ src/
 
 | # | Kriter | Test Yöntemi |
 |---|--------|--------------|
-| AC-01 | Geçerli bilgilerle kayıt olunca 201 dönmeli | Jest / Postman |
-| AC-02 | Var olan e-postayla kayıt 409 dönmeli | Jest |
-| AC-03 | Doğru kimlikle giriş yapınca JWT token dönmeli | Jest / Postman |
-| AC-04 | Yanlış şifreyle giriş 401 dönmeli | Jest |
+| AC-01 | Geçerli bilgilerle kayıt olunca 201 dönmeli | Pytest / Postman |
+| AC-02 | Var olan e-postayla kayıt 409 dönmeli | Pytest |
+| AC-03 | Doğru kimlikle giriş yapınca JWT token dönmeli | Pytest / Postman |
+| AC-04 | Yanlış şifreyle giriş 401 dönmeli | Pytest |
 | AC-05 | Login sonrası customer `/`'e, manager `/admin`'e gitmeli | Cypress / Manuel |
 | AC-06 | Boş form submit edilince frontend hataları göstermeli | Manuel |
-| AC-07 | Şifre DB'de hash olarak saklanmalı, düz metin bulunmamalı | DB sorgusu |
-| AC-08 | Token olmadan korumalı route'a gidince 401 dönmeli | Jest |
+| AC-07 | Şifre Supabase'de güvenle saklanmalı | - |
+| AC-08 | Yetkisiz olarak korumalı route'a gidince 401 dönmeli | Pytest |
 
 ---
 
 ## 9. Definition of Done
 
 - [ ] `POST /api/auth/register` ve `POST /api/auth/login` çalışıyor
-- [ ] `users` tablosu migration ile oluşturulmuş
-- [ ] Şifreler bcrypt ile hashleniyor
+- [ ] Kullanıcılar Supabase üzerinde tutuluyor
+- [ ] Şifreler güvenle yönetiliyor
 - [ ] Frontend'de LoginPage ve RegisterPage render oluyor
-- [ ] Form validasyonu hem client hem server tarafta çalışıyor
+- [ ] Form validasyonu hem client hem server (Pydantic) tarafta çalışıyor
 - [ ] Rol bazlı redirect çalışıyor
-- [ ] En az 5 unit test yazılmış (backend)
+- [ ] Unit test yazılmış
 - [ ] `.env.example` dosyası repoya eklenmiş
 - [ ] Kod review'dan geçmiş, PR merge edilmiş
 

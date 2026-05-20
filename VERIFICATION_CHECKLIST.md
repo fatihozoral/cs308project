@@ -41,12 +41,12 @@ Use this checklist to verify that the implementation meets all PRD requirements.
 ### 2. Backend (Section 5)
 
 #### 2.1 Tech Stack
-- [x] Node.js 20+ compatible
-- [x] Express.js framework
-- [x] pg (node-postgres) for database
-- [x] jsonwebtoken for JWT
-- [x] bcrypt for password hashing
-- [x] express-validator for validation
+- [x] Python 3.10+ compatible
+- [x] FastAPI framework
+- [x] Supabase (PostgreSQL) for database
+- [x] Supabase Auth for JWT
+- [x] Supabase Auth for password hashing
+- [x] Pydantic for validation
 
 #### 2.2 POST /api/auth/register
 - [x] Endpoint implemented
@@ -84,11 +84,10 @@ Use this checklist to verify that the implementation meets all PRD requirements.
 - [x] Adds decoded user to req.user
 
 #### 2.6 Folder Structure
-- [x] controllers/authController.js
-- [x] middleware/authMiddleware.js
-- [x] routes/authRoutes.js
-- [x] validators/authValidators.js
-- [x] utils/hashPassword.js
+- [x] app/api/auth.py
+- [x] app/core/security.py
+- [x] app/schemas/user.py
+- [x] app/services/supabase_service.py
 
 ---
 
@@ -141,20 +140,20 @@ Use this checklist to verify that the implementation meets all PRD requirements.
 - [x] Applied after login
 
 #### 3.7 Folder Structure
-- [x] pages/LoginPage.jsx
-- [x] pages/RegisterPage.jsx
-- [x] components/auth/LoginForm.jsx
-- [x] components/auth/RegisterForm.jsx
-- [x] context/AuthContext.jsx
-- [x] services/authService.js
-- [x] utils/validators.js
+- [x] pages/LoginPage.tsx
+- [x] pages/RegisterPage.tsx
+- [x] components/auth/LoginForm.tsx
+- [x] components/auth/RegisterForm.tsx
+- [x] context/AuthContext.tsx
+- [x] services/authService.ts
+- [x] utils/validators.ts
 
 ---
 
 ### 4. Security (Section 7)
 
 #### 4.1 Password Security
-- [x] bcrypt with salt rounds: 10
+- [x] Handled securely by Supabase Auth
 - [x] No plaintext passwords stored
 - [x] Password validation (complexity rules)
 
@@ -170,7 +169,7 @@ Use this checklist to verify that the implementation meets all PRD requirements.
 - [x] Token in localStorage (client-side)
 
 #### 4.4 Input Validation
-- [x] Server-side validation (express-validator)
+- [x] Server-side validation (Pydantic)
 - [x] Client-side validation (React)
 - [x] Sanitization (normalizeEmail, trim)
 
@@ -212,14 +211,14 @@ Use this checklist to verify that the implementation meets all PRD requirements.
 ### Manual Testing Checklist
 
 #### Registration Flow
-- [ ] Navigate to http://localhost:3000/register
+- [ ] Navigate to http://localhost:5173/register
 - [ ] Fill all fields with valid data
 - [ ] Click "Kayıt Ol"
 - [ ] Verify success message appears
 - [ ] Verify redirect to login page
 
 #### Login Flow
-- [ ] Navigate to http://localhost:3000/login
+- [ ] Navigate to http://localhost:5173/login
 - [ ] Enter registered email and password
 - [ ] Click "Giriş Yap"
 - [ ] Verify redirect to appropriate page based on role
@@ -245,7 +244,8 @@ Use this checklist to verify that the implementation meets all PRD requirements.
 ### Automated Testing
 ```bash
 cd backend
-npm test
+source venv/bin/activate
+pytest
 ```
 
 Expected output:
@@ -273,14 +273,14 @@ Expected output:
 - [ ] Indexes created
 
 ### Dependencies
-- [ ] backend/node_modules installed
+- [ ] backend venv created and requirements.txt installed
 - [ ] frontend/node_modules installed
 - [ ] No security vulnerabilities (run npm audit)
 
 ### Server Status
-- [ ] Backend running on port 5000
-- [ ] Frontend running on port 3000
-- [ ] Health check endpoint responds: http://localhost:5000/health
+- [ ] Backend running on port 8000
+- [ ] Frontend running on port 5173
+- [ ] Health check endpoint responds: http://localhost:8000/
 
 ---
 
