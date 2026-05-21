@@ -421,8 +421,25 @@ const AdminProductsPage: React.FC = () => {
           <div className="animate-fade-up space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">{deliveries.length} teslimat / sipariş</span>
-              <button onClick={fetchDeliveries} className="btn-ghost px-4 py-2 text-xs font-semibold flex items-center gap-2">
-                🔄 Yenile
+              <button 
+                onClick={fetchDeliveries} 
+                disabled={loading}
+                className="w-9 h-9 rounded-full glass hover:glass-strong flex items-center justify-center text-fg transition-all active:scale-95 disabled:opacity-50"
+                title="Yenile"
+              >
+                <svg 
+                  className={`w-4 h-4 text-teal-DEFAULT ${loading ? 'animate-spin' : ''}`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2.5} 
+                    d="M19.917 14.817A7 7 0 1119 7.556m-4.556.444h4.556V3.444" 
+                  />
+                </svg>
               </button>
             </div>
 
@@ -534,7 +551,7 @@ const AdminProductsPage: React.FC = () => {
                               {del.status === 'in-transit' && (
                                 <button
                                   onClick={() => handleUpdateStatus(del.id, 'delivered')}
-                                  className="px-3 py-1.5 text-xs font-bold rounded-pill bg-teal-DEFAULT hover:bg-teal-glow text-bg transition-all whitespace-nowrap"
+                                  className="bg-gradient-to-r from-teal-400 to-emerald-500 hover:opacity-95 active:scale-95 transition-all text-bg px-3 py-1.5 text-xs font-bold rounded-pill shadow-lg shadow-emerald-500/20 whitespace-nowrap"
                                 >
                                   ✅ Teslim Et
                                 </button>
