@@ -25,6 +25,19 @@ ADD COLUMN IF NOT EXISTS ticket_categories jsonb;
 
 ALTER TABLE public.order_items 
 ADD COLUMN IF NOT EXISTS category text;
+
+
+-- ==========================================
+-- 3. ORDERS (SİPARİŞLER) TABLOSU İÇİN YENİ SÜTUNLAR
+-- ==========================================
+-- Teslimat listesinde asgari olarak bulunması gereken müşteri adı, adresi,
+-- e-postası ve vergi numarası gibi bilgileri sipariş anında orders tablosuna kaydeder.
+
+ALTER TABLE public.orders 
+ADD COLUMN IF NOT EXISTS user_name text,
+ADD COLUMN IF NOT EXISTS user_email text,
+ADD COLUMN IF NOT EXISTS home_address text,
+ADD COLUMN IF NOT EXISTS tax_id text;
 ```
 
 ### Örnek Tablo İçeriği (JSONB - `ticket_categories`)

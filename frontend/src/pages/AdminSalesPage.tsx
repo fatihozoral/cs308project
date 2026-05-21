@@ -34,6 +34,8 @@ interface Order {
   items: OrderItem[];
   user_email?: string;
   user_name?: string;
+  home_address?: string;
+  tax_id?: string;
 }
 
 const AdminSalesPage: React.FC = () => {
@@ -45,7 +47,6 @@ const AdminSalesPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -87,31 +88,16 @@ const AdminSalesPage: React.FC = () => {
     return 'processing';
   };
 
-  const getNextDeliveryStatus = (status: string): { next: 'in-transit' | 'delivered'; label: string } | null => {
-    const normalized = normalizeStatus(status);
-    if (normalized === 'processing') return { next: 'in-transit', label: 'Yola Çıkar' };
-    if (normalized === 'in-transit') return { next: 'delivered', label: 'Teslim Edildi Yap' };
-    return null;
-  };
 
-  const updateOrderStatus = async (order: Order, nextStatus: 'in-transit' | 'delivered') => {
-    setUpdatingStatusId(order.id);
-    try {
-      const orderId = order.raw_id ?? order.id;
-      await axios.patch(`${API_URL}/orders/${orderId}/status`, { status: nextStatus }, { headers: getAuthHeader() });
-      setOrders(prev => prev.map(item => item.id === order.id ? { ...item, status: nextStatus } : item));
-    } catch (error) {
-      console.error('Sipariş durumu güncellenemedi:', error);
-      alert('Sipariş durumu güncellenemedi.');
-    } finally {
-      setUpdatingStatusId(null);
-    }
-  };
 
   const revenueOrders = filtered.filter(o => normalizeStatus(o.status) !== 'cancelled');
   const completedOrders = filtered.filter(o => normalizeStatus(o.status) === 'delivered');
   const cancelledOrders = filtered.filter(o => normalizeStatus(o.status) === 'cancelled');
   const completedRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
+
+  // Requirement 11: Estimated Expenses (Maliyet/Zarar) and Net Profit (Net Kar)
+  const estimatedExpenses = completedRevenue * 0.4;
+  const estimatedNetProfit = completedRevenue * 0.6;
 
   // Build chart data — group by date
   const revenueByDate: Record<string, number> = {};
@@ -125,6 +111,7 @@ const AdminSalesPage: React.FC = () => {
     .map(([date, revenue]) => ({
       date,
       revenue,
+      profit: revenue * 0.6,
       label: date.includes('.') ? date.slice(0, 5) : date.slice(5),
     }));
 
@@ -136,6 +123,10 @@ const AdminSalesPage: React.FC = () => {
   const linePoints = chartData.map((point, index) => `${getX(index)},${getY(point.revenue)}`).join(' ');
   const areaPath = chartData.length > 0
     ? `M ${getX(0)} ${CHART_PAD.top + plotHeight} L ${chartData.map((point, index) => `${getX(index)} ${getY(point.revenue)}`).join(' L ')} L ${getX(chartData.length - 1)} ${CHART_PAD.top + plotHeight} Z`
+    : '';
+  const profitLinePoints = chartData.map((point, index) => `${getX(index)},${getY(point.profit)}`).join(' ');
+  const profitAreaPath = chartData.length > 0
+    ? `M ${getX(0)} ${CHART_PAD.top + plotHeight} L ${chartData.map((point, index) => `${getX(index)} ${getY(point.profit)}`).join(' L ')} L ${getX(chartData.length - 1)} ${CHART_PAD.top + plotHeight} Z`
     : '';
   const yTicks = [1, 0.75, 0.5, 0.25, 0].map(ratio => ({
     y: CHART_PAD.top + plotHeight * (1 - ratio),
@@ -203,17 +194,19 @@ const AdminSalesPage: React.FC = () => {
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-up">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 animate-fade-up">
           {[
-            { label: 'Toplam Gelir', value: `₺${completedRevenue.toLocaleString('tr-TR')}`, icon: '💰', accent: 'text-teal-DEFAULT' },
+            { label: 'Toplam Gelir (Ciro)', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', accent: 'text-teal-DEFAULT' },
+            { label: 'Tahmini Gider (%40)', value: `₺${estimatedExpenses.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📉', accent: 'text-red-400' },
+            { label: 'Tahmini Net Kar (%60)', value: `₺${estimatedNetProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📈', accent: 'text-teal-accent' },
             { label: 'Toplam Sipariş', value: filtered.length, icon: '🎟️', accent: 'text-fg' },
             { label: 'Tamamlanan', value: completedOrders.length, icon: '✅', accent: 'text-teal-DEFAULT' },
             { label: 'İptal Edilen', value: cancelledOrders.length, icon: '❌', accent: 'text-red-400' },
           ].map(({ label, value, icon, accent }) => (
-            <div key={label} className="glass-strong rounded-2xl p-5">
+            <div key={label} className="glass-strong rounded-2xl p-5 hover:scale-[1.02] transition-transform duration-200">
               <p className="text-2xl mb-2">{icon}</p>
-              <p className={`text-2xl font-black ${accent}`}>{value}</p>
-              <p className="text-xs text-muted mt-1 font-medium">{label}</p>
+              <p className={`text-xl font-black ${accent} truncate`}>{value}</p>
+              <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-medium">{label}</p>
             </div>
           ))}
         </div>
@@ -221,27 +214,46 @@ const AdminSalesPage: React.FC = () => {
         {/* Revenue chart */}
         {chartData.length > 0 && (
           <div className="glass-strong rounded-3xl p-6 animate-fade-up">
-            <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="font-bold text-fg">Günlük Gelir Grafiği</h2>
-                <p className="text-xs text-muted mt-1">İptal edilmeyen siparişlerden günlük gelir dağılımı</p>
+                <h2 className="font-bold text-fg text-lg">Günlük Finansal Grafik</h2>
+                <p className="text-xs text-muted mt-1">Son 14 günün ciro ve net kar dağılımı</p>
+                {/* Legend */}
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-1.5 text-xs text-fg">
+                    <span className="w-3 h-1 bg-teal-DEFAULT rounded-full" />
+                    <span>Ciro (Gelir)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-fg">
+                    <span className="w-3 h-1 bg-violet-400 rounded-full" />
+                    <span>Net Kar (%60)</span>
+                  </div>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Tepe Gün</p>
-                <p className="text-sm font-black text-teal-DEFAULT">₺{maxVal.toLocaleString('tr-TR')}</p>
+              <div className="text-right glass px-4 py-2 rounded-xl">
+                <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Tepe Gün Geliri</p>
+                <p className="text-base font-black text-teal-DEFAULT">₺{maxVal.toLocaleString('tr-TR')}</p>
               </div>
             </div>
 
             <div className="w-full overflow-x-auto">
-              <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="min-w-[760px] w-full h-[300px]" role="img" aria-label="Günlük gelir grafiği">
+              <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="min-w-[760px] w-full h-[300px]" role="img" aria-label="Günlük gelir ve kar grafiği">
                 <defs>
                   <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.36" />
-                    <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.02" />
+                    <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.01" />
                   </linearGradient>
                   <linearGradient id="revenueLine" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="rgb(94, 234, 212)" />
-                    <stop offset="100%" stopColor="rgb(250, 204, 21)" />
+                    <stop offset="0%" stopColor="rgb(45, 212, 191)" />
+                    <stop offset="100%" stopColor="rgb(20, 184, 166)" />
+                  </linearGradient>
+                  <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgb(139, 92, 246)" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="rgb(139, 92, 246)" stopOpacity="0.01" />
+                  </linearGradient>
+                  <linearGradient id="profitLine" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="rgb(167, 139, 250)" />
+                    <stop offset="100%" stopColor="rgb(139, 92, 246)" />
                   </linearGradient>
                 </defs>
 
@@ -276,6 +288,7 @@ const AdminSalesPage: React.FC = () => {
                   stroke="rgba(148, 163, 184, 0.2)"
                 />
 
+                {/* Revenue area & line */}
                 <path d={areaPath} fill="url(#revenueArea)" />
                 {chartData.length > 1 ? (
                   <polyline points={linePoints} fill="none" stroke="url(#revenueLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
@@ -291,24 +304,51 @@ const AdminSalesPage: React.FC = () => {
                   />
                 )}
 
+                {/* Profit area & line */}
+                <path d={profitAreaPath} fill="url(#profitArea)" />
+                {chartData.length > 1 ? (
+                  <polyline points={profitLinePoints} fill="none" stroke="url(#profitLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                ) : (
+                  <line
+                    x1={CHART_PAD.left + plotWidth * 0.35}
+                    x2={CHART_PAD.left + plotWidth * 0.65}
+                    y1={getY(chartData[0].profit)}
+                    y2={getY(chartData[0].profit)}
+                    stroke="url(#profitLine)"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                  />
+                )}
+
                 {chartData.map((point, index) => {
                   const x = getX(index);
-                  const y = getY(point.revenue);
+                  const yRev = getY(point.revenue);
+                  const yProf = getY(point.profit);
                   return (
                     <g key={point.date}>
                       <line
                         x1={x}
                         x2={x}
-                        y1={y}
+                        y1={yRev}
                         y2={CHART_PAD.top + plotHeight}
-                        stroke="rgba(45, 212, 191, 0.16)"
+                        stroke="rgba(45, 212, 191, 0.12)"
                         strokeDasharray="4 5"
                       />
-                      <circle cx={x} cy={y} r="7" fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth="3" />
-                      <circle cx={x} cy={y} r="3" fill="rgb(250, 204, 21)" />
-                      <text x={x} y={y - 14} textAnchor="middle" className="fill-teal-300 text-[12px] font-bold">
-                        ₺{point.revenue.toLocaleString('tr-TR')}
+                      
+                      {/* Revenue point & label */}
+                      <circle cx={x} cy={yRev} r="6" fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth="2.5" />
+                      <circle cx={x} cy={yRev} r="2.5" fill="rgb(45, 212, 191)" />
+                      <text x={x} y={yRev - 12} textAnchor="middle" className="fill-teal-300 text-[10px] font-bold">
+                        ₺{Math.round(point.revenue).toLocaleString('tr-TR')}
                       </text>
+
+                      {/* Profit point & label */}
+                      <circle cx={x} cy={yProf} r="6" fill="rgb(17, 24, 39)" stroke="rgb(167, 139, 250)" strokeWidth="2.5" />
+                      <circle cx={x} cy={yProf} r="2.5" fill="rgb(167, 139, 250)" />
+                      <text x={x} y={yProf + 16} textAnchor="middle" className="fill-violet-300 text-[10px] font-bold">
+                        ₺{Math.round(point.profit).toLocaleString('tr-TR')}
+                      </text>
+
                       <text x={x} y={CHART_HEIGHT - 16} textAnchor="middle" className="fill-slate-400 text-[11px]">
                         {point.label}
                       </text>
@@ -340,7 +380,6 @@ const AdminSalesPage: React.FC = () => {
                 const normalizedStatus = normalizeStatus(order.status);
                 const sc = statusCfg[normalizedStatus] || statusCfg.processing;
                 const isExpanded = expandedId === order.id;
-                const nextDeliveryStatus = getNextDeliveryStatus(order.status);
                 return (
                   <div key={order.id}
                     className="glass hover:glass-strong rounded-2xl overflow-hidden transition-all animate-fade-up"
@@ -361,18 +400,6 @@ const AdminSalesPage: React.FC = () => {
                           <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>
                           {sc.label}
                         </span>
-                        {nextDeliveryStatus && (
-                          <button
-                            type="button"
-                            onClick={event => {
-                              event.stopPropagation();
-                              updateOrderStatus(order, nextDeliveryStatus.next);
-                            }}
-                            disabled={updatingStatusId === order.id}
-                            className="px-3 py-1 rounded-pill text-xs font-bold btn-gradient disabled:opacity-60">
-                            {updatingStatusId === order.id ? 'Güncelleniyor...' : nextDeliveryStatus.label}
-                          </button>
-                        )}
                         <p className="font-black text-fg">₺{Number(order.total).toLocaleString('tr-TR')}</p>
                         <svg
                           className={`w-4 h-4 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -384,19 +411,41 @@ const AdminSalesPage: React.FC = () => {
 
                     {/* Expanded items */}
                     {isExpanded && (
-                      <div className="border-t border-border px-6 py-4 space-y-3">
-                        {order.items.map(item => (
-                          <div key={item.id} className="flex items-center justify-between text-sm">
-                            <div>
-                              <p className="font-semibold text-fg">{item.name}</p>
-                              <p className="text-xs text-muted">{item.date} · {item.venue}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-muted">{item.quantity} bilet</p>
-                              <p className="font-bold text-fg">₺{item.price * item.quantity}</p>
-                            </div>
+                      <div className="border-t border-border px-6 py-4 space-y-4 animate-fade-up">
+                        {/* Customer & Address Details */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/5 rounded-2xl p-4 border border-white/10 text-xs">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Müşteri Bilgileri</p>
+                            <p className="text-fg font-bold mt-1 text-sm">{order.user_name || 'Bilinmeyen Müşteri'}</p>
+                            <p className="text-muted font-mono mt-0.5">{order.user_email || 'E-posta adresi yok'}</p>
+                            {order.tax_id && (
+                              <p className="text-teal-accent font-semibold mt-1">TC / Vergi No: {order.tax_id}</p>
+                            )}
                           </div>
-                        ))}
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Teslimat Adresi</p>
+                            <p className="text-fg mt-1 leading-relaxed whitespace-pre-wrap">
+                              {order.home_address || 'Adres girilmemiş'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Order Items */}
+                        <div className="space-y-3 pt-2">
+                          <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold px-1">Satın Alınan Biletler</p>
+                          {order.items.map(item => (
+                            <div key={item.id} className="flex items-center justify-between text-sm hover:bg-white/5 p-1 rounded-lg transition-colors">
+                              <div>
+                                <p className="font-semibold text-fg">{item.name}</p>
+                                <p className="text-xs text-muted">{item.date} · {item.venue}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs text-muted">{item.quantity} bilet</p>
+                                <p className="font-bold text-fg">₺{item.price * item.quantity}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

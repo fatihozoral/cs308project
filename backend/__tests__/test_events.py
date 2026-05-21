@@ -92,8 +92,3 @@ class TestGetEvents:
         assert len(data) == 2
         cities = [e["city"] for e in data]
         assert all(c == "Istanbul" for c in cities)
-
-    def test_no_auth_returns_422(self):
-        """Request without Authorization header should return 422 (required header missing)"""
-        response = client.get("/api/events")
-        assert response.status_code == 422

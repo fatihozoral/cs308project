@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
@@ -140,7 +141,13 @@ const getBotResponse = (input: string): string => {
 };
 
 const ChatBot: React.FC = () => {
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Admin / yönetici panellerinde bilet asistanı butonunu gizle
+  if (location.pathname.startsWith('/admin')) {
+    return null;
+  }
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
