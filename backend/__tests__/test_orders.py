@@ -79,13 +79,21 @@ class TestGetAllOrders:
         assert response.status_code == 403
 
     @patch("app.api.orders.supabase")
-    def test_product_manager_cannot_access_all_orders(self, mock_supabase):
-        """Product manager should get 403 when accessing /orders/all"""
+    def test_product_manager_can_access_all_orders(self, mock_supabase):
+        """Product manager should be able to access /orders/all for Delivery Management"""
         mock_user = make_user(role="product_manager")
         mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
 
+        orders_mock = MagicMock()
+        orders_mock.data = [make_order(1)]
+        mock_supabase.table.return_value.select.return_value.order.return_value.execute.return_value = orders_mock
+
+        items_mock = MagicMock()
+        items_mock.data = []
+        mock_supabase.table.return_value.select.return_value.in_.return_value.execute.return_value = items_mock
+
         response = client.get("/api/orders/all", headers={"Authorization": "Bearer fake-token"})
-        assert response.status_code == 403
+        assert response.status_code == 200
 
     def test_missing_auth_header_returns_422(self):
         """Missing authorization header should return error"""

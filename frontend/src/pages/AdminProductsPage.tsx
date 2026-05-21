@@ -47,9 +47,10 @@ const AdminProductsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<'products' | 'comments'>('products');
+  const [tab, setTab] = useState<'products' | 'comments' | 'deliveries'>('products');
   const [events, setEvents] = useState<Event[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -68,6 +69,7 @@ const AdminProductsPage: React.FC = () => {
   useEffect(() => {
     fetchEvents();
     fetchComments();
+    fetchDeliveries();
 
     if (!GOOGLE_MAPS_API_KEY) return;
 
@@ -143,6 +145,25 @@ const AdminProductsPage: React.FC = () => {
       const res = await axios.get(`${API_URL}/comments/pending`, { headers: getAuthHeader() });
       setComments(res.data);
     } catch { setComments([]); }
+  };
+
+  const fetchDeliveries = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/orders/all`, { headers: getAuthHeader() });
+      setDeliveries(res.data);
+    } catch {
+      setDeliveries([]);
+    } finally { setLoading(false); }
+  };
+
+  const handleUpdateStatus = async (orderId: string, nextStatus: 'in-transit' | 'delivered') => {
+    try {
+      await axios.patch(`${API_URL}/orders/${orderId}/status`, { status: nextStatus }, { headers: getAuthHeader() });
+      setDeliveries(prev => prev.map(d => d.id === orderId ? { ...d, status: nextStatus } : d));
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Teslimat durumu güncellenemedi.');
+    }
   };
 
   const handleAddEvent = async (e: React.FormEvent) => {
@@ -230,7 +251,11 @@ const AdminProductsPage: React.FC = () => {
 
         {/* Tabs */}
         <div className="flex gap-2">
-          {[{ key: 'products', label: '🎟️ Etkinlikler' }, { key: 'comments', label: `💬 Yorum Onaylama ${comments.length > 0 ? `(${comments.length})` : ''}` }].map(t => (
+          {[
+            { key: 'products', label: '🎟️ Etkinlikler' },
+            { key: 'comments', label: `💬 Yorum Onaylama ${comments.length > 0 ? `(${comments.length})` : ''}` },
+            { key: 'deliveries', label: '🚚 Teslimat Yönetimi' }
+          ].map(t => (
             <button key={t.key} onClick={() => setTab(t.key as any)}
               className={`px-5 py-2.5 rounded-pill text-sm font-semibold transition-all ${tab === t.key ? 'btn-gradient' : 'btn-ghost'}`}>
               {t.label}
@@ -387,6 +412,144 @@ const AdminProductsPage: React.FC = () => {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* DELIVERIES TAB */}
+        {tab === 'deliveries' && (
+          <div className="animate-fade-up space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted">{deliveries.length} teslimat / sipariş</span>
+              <button onClick={fetchDeliveries} className="btn-ghost px-4 py-2 text-xs font-semibold flex items-center gap-2">
+                🔄 Yenile
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="glass rounded-2xl p-12 text-center text-muted">Yükleniyor...</div>
+            ) : deliveries.length === 0 ? (
+              <div className="glass rounded-2xl p-12 text-center animate-fade-up">
+                <p className="text-4xl mb-3">🚚</p>
+                <p className="text-muted">Henüz teslimat bulunmuyor.</p>
+              </div>
+            ) : (
+              <div className="glass-strong rounded-3xl overflow-hidden animate-fade-up">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px]">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {[
+                          'Sipariş ID',
+                          'Müşteri Bilgisi',
+                          'Adres / Vergi No',
+                          'Satın Alınan Ürünler',
+                          'Toplam Tutar',
+                          'Durum',
+                          'İşlemler'
+                        ].map(h => (
+                          <th key={h} className="px-5 py-3.5 text-left text-xs font-bold text-muted uppercase tracking-widest">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border text-sm">
+                      {deliveries.map((del, i) => (
+                        <tr key={del.id} className="hover:bg-white/5 transition-colors animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
+                          {/* Sipariş ID */}
+                          <td className="px-5 py-4 font-mono font-bold text-fg">
+                            {del.id}
+                          </td>
+                          {/* Müşteri Bilgisi */}
+                          <td className="px-5 py-4">
+                            <div>
+                              <p className="font-semibold text-fg">{del.user_name || 'Bilinmeyen Müşteri'}</p>
+                              <p className="text-xs text-muted font-mono">{del.user_email || 'E-posta yok'}</p>
+                              <p className="text-xs text-muted-2 mt-1">ID: {del.user_id}</p>
+                            </div>
+                          </td>
+                          {/* Adres / Vergi No */}
+                          <td className="px-5 py-4 max-w-xs">
+                            <p className="text-xs text-fg break-words line-clamp-2" title={del.home_address}>
+                              {del.home_address || <span className="text-muted italic">Adres girilmemiş</span>}
+                            </p>
+                            {del.tax_id && (
+                              <p className="text-xs text-teal-accent font-semibold mt-1">
+                                TC/Vergi No: {del.tax_id}
+                              </p>
+                            )}
+                          </td>
+                          {/* Satın Alınan Ürünler */}
+                          <td className="px-5 py-4">
+                            <div className="space-y-1">
+                              {del.items && del.items.map((item: any) => (
+                                <div key={item.id} className="text-xs text-fg flex items-center gap-1.5">
+                                  <span className="inline-block w-4 h-4 rounded bg-teal-dim border border-teal-DEFAULT/20 text-[10px] text-teal-DEFAULT text-center font-bold">
+                                    {item.quantity}
+                                  </span>
+                                  <span className="font-medium text-fg truncate max-w-[150px]">{item.name}</span>
+                                  <span className="text-muted-2">({item.venue})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          {/* Toplam Tutar */}
+                          <td className="px-5 py-4 font-bold text-fg">
+                            ₺{del.total}
+                          </td>
+                          {/* Durum */}
+                          <td className="px-5 py-4">
+                            {del.status === 'delivered' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-teal-dim border border-teal-DEFAULT/30 text-teal-DEFAULT text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-teal-DEFAULT" />
+                                Teslim Edildi
+                              </span>
+                            ) : del.status === 'in-transit' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                Yolda
+                              </span>
+                            ) : del.status === 'processing' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-blue-500/10 border border-blue-500/30 text-blue-400 text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                Hazırlanıyor
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                {del.status || 'Bilinmiyor'}
+                              </span>
+                            )}
+                          </td>
+                          {/* İşlemler */}
+                          <td className="px-5 py-4">
+                            <div className="flex gap-2">
+                              {del.status === 'processing' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(del.id, 'in-transit')}
+                                  className="btn-gradient px-3 py-1.5 text-xs font-bold whitespace-nowrap shadow-teal/20"
+                                >
+                                  🚚 Yola Çıkar
+                                </button>
+                              )}
+                              {del.status === 'in-transit' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(del.id, 'delivered')}
+                                  className="px-3 py-1.5 text-xs font-bold rounded-pill bg-teal-DEFAULT hover:bg-teal-glow text-bg transition-all whitespace-nowrap"
+                                >
+                                  ✅ Teslim Et
+                                </button>
+                              )}
+                              {(del.status === 'delivered' || del.status === 'cancelled') && (
+                                <span className="text-xs text-muted italic">İşlem yok</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             )}
           </div>
         )}
