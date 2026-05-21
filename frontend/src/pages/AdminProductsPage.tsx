@@ -551,7 +551,7 @@ const AdminProductsPage: React.FC = () => {
                               {del.status === 'in-transit' && (
                                 <button
                                   onClick={() => handleUpdateStatus(del.id, 'delivered')}
-                                  className="bg-gradient-to-r from-teal-400 to-emerald-500 hover:opacity-95 active:scale-95 transition-all text-bg px-3 py-1.5 text-xs font-bold rounded-pill shadow-lg shadow-emerald-500/20 whitespace-nowrap"
+                                  className="btn-gradient px-3 py-1.5 text-xs font-bold whitespace-nowrap shadow-teal/20"
                                 >
                                   ✅ Teslim Et
                                 </button>
