@@ -51,3 +51,43 @@ Spor müsabakalarında bu yapıyı kullanabilmeniz için bir tablo satırında `
   {"name": "Kale Arkası", "price": 250, "capacity": 3000, "remaining": 3000}
 ]
 ```
+
+-- ==========================================
+-- 4. YENİ EKSİKLİKLER (G9, G11, G15) İÇİN SQL MİGRASYONU
+-- ==========================================
+
+-- G9: Fiziksel/Donanımsal Mock Özellikler
+ALTER TABLE public.events 
+ADD COLUMN IF NOT EXISTS model text,
+ADD COLUMN IF NOT EXISTS serial_number text,
+ADD COLUMN IF NOT EXISTS warranty_status text,
+ADD COLUMN IF NOT EXISTS distributor_info text;
+
+-- G11: Kampanya İndirim Oranı (%0 - %90)
+ALTER TABLE public.events 
+ADD COLUMN IF NOT EXISTS discount_rate integer DEFAULT 0;
+
+-- G11: İstek Listesi ve Genel Bildirimler Hub'ı
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL,
+    title text NOT NULL,
+    message text NOT NULL,
+    is_read boolean DEFAULT false,
+    created_at timestamptz DEFAULT now()
+);
+
+-- G15: Ürün Bazlı (Selective) İade ve Geri Ödeme Süreci
+CREATE TABLE IF NOT EXISTS public.returns (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    order_id integer NOT NULL,
+    order_item_id integer NOT NULL,
+    user_id uuid NOT NULL,
+    quantity integer NOT NULL,
+    price float NOT NULL, -- Biletin satın alındığı andaki indirimli fiyatı (kilitlenmiş fiyat)
+    status text DEFAULT 'pending', -- pending, approved, rejected
+    reason text,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+

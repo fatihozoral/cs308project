@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import auth, events, orders, comments, wishlist, admin
+from app.api import auth, events, orders, comments, wishlist, admin, notifications
 
 app = FastAPI(
     title="CS308 Ticketing Platform - FastAPI Backend",
@@ -24,6 +24,7 @@ app.include_router(orders.router, prefix="/api", tags=["Orders"])
 app.include_router(comments.router, prefix="/api", tags=["Comments"])
 app.include_router(wishlist.router, prefix="/api", tags=["Wishlist"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(notifications.router, prefix="/api", tags=["Notifications"])
 
 @app.get("/")
 def read_root():

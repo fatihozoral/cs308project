@@ -19,6 +19,11 @@ class EventBase(BaseModel):
     description: Optional[str] = None
     featured_names: Optional[str] = None
     image_url: Optional[str] = None
+    model: Optional[str] = None
+    serial_number: Optional[str] = None
+    warranty_status: Optional[str] = None
+    distributor_info: Optional[str] = None
+    discount_rate: Optional[int] = 0
 
 class EventCreate(EventBase):
     pass

@@ -59,6 +59,12 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
         except Exception:
             formatted_date = date_str
             
+        orig_price = float(row.get("price") or 0.0)
+        discount_rate = int(row.get("discount_rate") or 0)
+        active_price = orig_price
+        if discount_rate > 0:
+            active_price = round(orig_price * (1 - discount_rate / 100.0), 2)
+
         result.append({
             "id": row["id"],
             "name": row["name"],
@@ -67,7 +73,9 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
             "time": row["event_time"],
             "venue": row["venue"],
             "city": row["city"],
-            "price": row["price"],
+            "price": active_price,
+            "original_price": orig_price,
+            "discount_rate": discount_rate,
             "emoji": row["emoji"],
             "image_url": row.get("image_url"),
             "description": row.get("description", ""),
@@ -75,7 +83,11 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
             "place_id": row.get("place_id"),
             "total_capacity": row.get("total_capacity"),
             "remaining_capacity": row.get("remaining_capacity"),
-            "ticket_categories": row.get("ticket_categories")
+            "ticket_categories": row.get("ticket_categories"),
+            "model": row.get("model"),
+            "serial_number": row.get("serial_number"),
+            "warranty_status": row.get("warranty_status"),
+            "distributor_info": row.get("distributor_info")
         })
         
     return result
@@ -99,6 +111,12 @@ async def get_event(event_id: int):
     except Exception:
         formatted_date = date_str
         
+    orig_price = float(row.get("price") or 0.0)
+    discount_rate = int(row.get("discount_rate") or 0)
+    active_price = orig_price
+    if discount_rate > 0:
+        active_price = round(orig_price * (1 - discount_rate / 100.0), 2)
+
     return {
         "id": row["id"],
         "name": row["name"],
@@ -107,12 +125,18 @@ async def get_event(event_id: int):
         "time": row["event_time"],
         "venue": row["venue"],
         "city": row["city"],
-        "price": row["price"],
+        "price": active_price,
+        "original_price": orig_price,
+        "discount_rate": discount_rate,
         "emoji": row["emoji"],
         "image_url": row.get("image_url"),
         "place_id": row.get("place_id"),
         "description": row.get("description", ""),
         "total_capacity": row.get("total_capacity"),
         "remaining_capacity": row.get("remaining_capacity"),
-        "ticket_categories": row.get("ticket_categories")
+        "ticket_categories": row.get("ticket_categories"),
+        "model": row.get("model"),
+        "serial_number": row.get("serial_number"),
+        "warranty_status": row.get("warranty_status"),
+        "distributor_info": row.get("distributor_info")
     }

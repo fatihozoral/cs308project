@@ -60,7 +60,8 @@ const AdminProductsPage: React.FC = () => {
   const [form, setForm] = useState({
     name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
     remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '',
-    place_id: '', image_url: '', lat: null as number | null, lng: null as number | null
+    place_id: '', image_url: '', lat: null as number | null, lng: null as number | null,
+    model: '', serial_number: '', warranty_status: '', distributor_info: ''
   });
 
   const placeInputRef = React.useRef<HTMLInputElement>(null);
@@ -184,7 +185,12 @@ const AdminProductsPage: React.FC = () => {
         remaining_capacity: capacity
       }, { headers: getAuthHeader() });
       setShowModal(false);
-      setForm({ name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '', place_id: '', image_url: '', lat: null, lng: null });
+      setForm({
+        name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
+        remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '',
+        place_id: '', image_url: '', lat: null, lng: null,
+        model: '', serial_number: '', warranty_status: '', distributor_info: ''
+      });
       fetchEvents();
     } catch { alert('Etkinlik eklenemedi.'); }
   };
@@ -627,9 +633,30 @@ const AdminProductsPage: React.FC = () => {
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Görsel URL</label>
                   <input value={form.image_url} onChange={e => setForm(p => ({ ...p, image_url: e.target.value }))} placeholder="https://.../event-images/gorsel.jpg" className={inputCls} />
                 </div>
-                <div className="col-span-2 space-y-1.5">
+                 <div className="col-span-2 space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Emoji</label>
                   <input value={form.emoji} onChange={e => setForm(p => ({ ...p, emoji: e.target.value }))} placeholder="🎵" className={inputCls} />
+                </div>
+                
+                {/* Physical / Technical Specs (G9) */}
+                <div className="col-span-2 mt-2 pt-2 border-t border-border/40">
+                  <h4 className="text-xs font-bold text-teal-DEFAULT uppercase tracking-wider mb-1">Fiziksel Özellikler (Mock)</h4>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Model</label>
+                  <input value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="Örn: TH-2026X" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Seri No</label>
+                  <input value={form.serial_number} onChange={e => setForm(p => ({ ...p, serial_number: e.target.value }))} placeholder="Örn: SN-987654" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Garanti Durumu</label>
+                  <input value={form.warranty_status} onChange={e => setForm(p => ({ ...p, warranty_status: e.target.value }))} placeholder="Örn: 2 Yıl" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Distribütör</label>
+                  <input value={form.distributor_info} onChange={e => setForm(p => ({ ...p, distributor_info: e.target.value }))} placeholder="Örn: TicketHub TR" className={inputCls} />
                 </div>
               </div>
               <div className="flex gap-3 pt-2">
