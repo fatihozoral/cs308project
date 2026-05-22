@@ -28,6 +28,12 @@ interface Event {
   lng?: number;
   description?: string;
   featured_names?: string;
+  model?: string;
+  serial_number?: string;
+  warranty_status?: string;
+  distributor_info?: string;
+  original_price?: number;
+  discount_rate?: number;
 }
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
@@ -320,8 +326,18 @@ const EventsPage: React.FC = () => {
                       <p className="text-teal-DEFAULT font-semibold">Kalan {event.remaining_capacity} bilet</p>
                     )}
                   </div>
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <span className="font-black text-fg">₺{event.price}</span>
+                  <div className="flex items-center justify-between pt-3 border-t border-border gap-2 flex-wrap">
+                    <div className="flex flex-col">
+                      <span className="font-black text-fg">₺{event.price}</span>
+                      {event.discount_rate && event.discount_rate > 0 && event.original_price && (
+                        <span className="text-[10px] text-muted line-through">₺{event.original_price}</span>
+                      )}
+                    </div>
+                    {event.discount_rate && event.discount_rate > 0 ? (
+                      <span className="text-[9px] font-bold text-rose-400 bg-rose-400/10 border border-rose-400/30 px-1.5 py-0.5 rounded-full shrink-0">
+                        %{event.discount_rate} İndirim
+                      </span>
+                    ) : null}
                     {wishlistSelectMode ? (
                       <span className={`px-4 py-1.5 rounded-pill text-xs font-bold ${selectedWishlistIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-ghost'}`}>
                         {selectedWishlistIds.has(event.id) ? 'Seçildi' : 'Seç'}

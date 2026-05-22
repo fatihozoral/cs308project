@@ -9,6 +9,13 @@ import QRCode from 'qrcode';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
+interface ReturnInfo {
+  status: 'pending' | 'approved' | 'rejected';
+  quantity: number;
+  price: number;
+  reason?: string;
+}
+
 interface OrderItem {
   id: number | string;
   name: string;
@@ -16,6 +23,7 @@ interface OrderItem {
   venue: string;
   quantity: number;
   price: number;
+  return_info?: ReturnInfo;
 }
 
 interface Order {
@@ -54,6 +62,27 @@ const statusCfg: Record<string, { label: string; dot: string; text: string; bg: 
   },
 };
 
+const returnStatusCfg: Record<string, { label: string; dot: string; text: string; bg: string }> = {
+  pending: {
+    label: 'İade Bekliyor',
+    dot: 'bg-amber-400',
+    text: 'text-amber-400',
+    bg: 'bg-amber-500/10 border-amber-500/30',
+  },
+  approved: {
+    label: 'İade Edildi',
+    dot: 'bg-emerald-400',
+    text: 'text-emerald-400',
+    bg: 'bg-emerald-500/10 border-emerald-500/30',
+  },
+  rejected: {
+    label: 'İade Reddedildi',
+    dot: 'bg-red-400',
+    text: 'text-red-400',
+    bg: 'bg-red-500/10 border-red-500/30',
+  },
+};
+
 const CANCELLABLE_STATUSES = ['processing'];
 
 const mapStatus = (status: string): string => {
@@ -70,6 +99,14 @@ const OrderHistoryPage: React.FC = () => {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelSuccessId, setCancelSuccessId] = useState<string | null>(null);
+
+  // Return modal and form states
+  const [returnOrder, setReturnOrder] = useState<Order | null>(null);
+  const [returnItem, setReturnItem] = useState<OrderItem | null>(null);
+  const [returnQty, setReturnQty] = useState<number>(1);
+  const [returnReason, setReturnReason] = useState<string>('');
+  const [returnLoading, setReturnLoading] = useState<boolean>(false);
+  const [returnSuccess, setReturnSuccess] = useState<boolean>(false);
 
   const downloadPDF = async (order: Order) => {
     const qrData = JSON.stringify({
@@ -155,6 +192,12 @@ const OrderHistoryPage: React.FC = () => {
             venue: item.venue,
             quantity: Number(item.quantity ?? 0),
             price: Number(item.price ?? 0),
+            return_info: item.return_info ? {
+              status: item.return_info.status,
+              quantity: Number(item.return_info.quantity ?? 0),
+              price: Number(item.return_info.price ?? 0),
+              reason: item.return_info.reason || '',
+            } : undefined,
           })),
         }));
         setOrders(backendOrders);
@@ -184,6 +227,61 @@ const OrderHistoryPage: React.FC = () => {
       setConfirmId(null);
       setCancelSuccessId(orderId);
       setCancelLoading(false);
+    }
+  };
+
+  const handleReturnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!returnOrder || !returnItem) return;
+
+    setReturnLoading(true);
+    try {
+      await axios.post(
+        `${API_URL}/orders/${returnOrder.id}/return`,
+        {
+          order_item_id: returnItem.id,
+          quantity: returnQty,
+          reason: returnReason || null,
+        },
+        { headers: getAuthHeader() }
+      );
+      setReturnSuccess(true);
+      
+      // Reload orders to reflect return info changes
+      const res = await axios.get(`${API_URL}/orders`, { headers: getAuthHeader() });
+      const backendOrders: Order[] = (res.data as any[]).map((order: any) => ({
+        id: order.id,
+        rawId: order.raw_id,
+        date: order.date,
+        total: Number(order.total ?? 0),
+        status: mapStatus(order.status),
+        items: (order.items || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          date: item.date,
+          venue: item.venue,
+          quantity: Number(item.quantity ?? 0),
+          price: Number(item.price ?? 0),
+          return_info: item.return_info ? {
+            status: item.return_info.status,
+            quantity: Number(item.return_info.quantity ?? 0),
+            price: Number(item.return_info.price ?? 0),
+            reason: item.return_info.reason || '',
+          } : undefined,
+        })),
+      }));
+      setOrders(backendOrders);
+      
+      // Auto-close modal after delay
+      setTimeout(() => {
+        setReturnOrder(null);
+        setReturnItem(null);
+      }, 1800);
+    } catch (err: any) {
+      console.error('İade talebi gönderilemedi:', err);
+      alert(err.response?.data?.detail || 'İade talebi gönderilemedi.');
+    } finally {
+      setReturnLoading(false);
     }
   };
 
@@ -285,38 +383,82 @@ const OrderHistoryPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {order.items.map(item => (
-                    <div key={item.id} className="px-6 py-5 flex flex-col md:flex-row items-center gap-4 border-b border-border/50 last:border-0">
-                      <div className="w-10 h-10 rounded-xl bg-teal-dim border border-teal-DEFAULT/20 flex flex-shrink-0 items-center justify-center">
-                        <svg className="w-5 h-5 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                        </svg>
-                      </div>
+                  {order.items.map(item => {
+                    const parseTurkishDate = (dateStr: string): Date => {
+                      const parts = dateStr.split('.');
+                      if (parts.length === 3) {
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1;
+                        const year = parseInt(parts[2], 10);
+                        return new Date(year, month, day);
+                      }
+                      return new Date(dateStr);
+                    };
 
-                      <div className="flex-1 min-w-0 flex flex-col md:flex-row w-full justify-between gap-4">
-                        <div className="flex-1">
-                          <p className="font-semibold text-fg">{item.name}</p>
-                          <p className="text-xs text-muted mt-0.5">{item.date} · {item.venue}</p>
+                    const orderDate = parseTurkishDate(order.date);
+                    const now = new Date();
+                    const diffTime = Math.abs(now.getTime() - orderDate.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const isWithin30Days = diffDays <= 30;
+
+                    return (
+                      <div key={item.id} className="px-6 py-5 flex flex-col md:flex-row items-center gap-4 border-b border-border/50 last:border-0">
+                        <div className="w-10 h-10 rounded-xl bg-teal-dim border border-teal-DEFAULT/20 flex flex-shrink-0 items-center justify-center">
+                          <svg className="w-5 h-5 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                          </svg>
                         </div>
 
-                        <div className="flex gap-4 items-center pl-2 md:pl-0 md:justify-end text-right w-full md:w-auto">
-                          {order.status !== 'cancelled' && (
-                            <div className="bg-white rounded-xl p-1 flex-shrink-0">
-                              <QRCodeSVG
-                                value={JSON.stringify({ order_id: order.id, item_id: item.id, item_name: item.name })}
-                                size={60}
-                                level="L"
-                              />
+                        <div className="flex-1 min-w-0 flex flex-col md:flex-row w-full justify-between gap-4">
+                          <div className="flex-1">
+                            <p className="font-semibold text-fg">{item.name}</p>
+                            <p className="text-xs text-muted mt-0.5">{item.date} · {item.venue}</p>
+                          </div>
+
+                          <div className="flex gap-4 items-center pl-2 md:pl-0 md:justify-end text-right w-full md:w-auto flex-wrap sm:flex-nowrap">
+                            {order.status !== 'cancelled' && (
+                              <div className="bg-white rounded-xl p-1 flex-shrink-0">
+                                <QRCodeSVG
+                                  value={JSON.stringify({ order_id: order.id, item_id: item.id, item_name: item.name })}
+                                  size={60}
+                                  level="L"
+                                />
+                              </div>
+                            )}
+                            <div className="text-right min-w-[70px]">
+                              <p className="text-xs text-muted">{item.quantity} bilet</p>
+                              <p className="font-bold text-fg">₺{item.price * item.quantity}</p>
                             </div>
-                          )}
-                          <div>
-                            <p className="text-xs text-muted">{item.quantity} bilet</p>
-                            <p className="font-bold text-fg">₺{item.price * item.quantity}</p>
+
+                            {/* Returns Action / Badge */}
+                            <div className="flex items-center pl-2">
+                              {item.return_info ? (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-[10px] font-bold ${returnStatusCfg[item.return_info.status]?.bg || ''} ${returnStatusCfg[item.return_info.status]?.text || ''}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${returnStatusCfg[item.return_info.status]?.dot || ''}`} />
+                                  {returnStatusCfg[item.return_info.status]?.label} ({item.return_info.quantity} Adet)
+                                </span>
+                              ) : (
+                                order.status !== 'cancelled' && isWithin30Days && (
+                                  <button
+                                    onClick={() => {
+                                      setReturnOrder(order);
+                                      setReturnItem(item);
+                                      setReturnQty(item.quantity);
+                                      setReturnReason('');
+                                      setReturnSuccess(false);
+                                    }}
+                                    className="text-xs font-semibold text-rose-400 hover:text-rose-300 border border-rose-500/30 hover:border-rose-400/50 px-3 py-1 rounded-pill transition-colors whitespace-nowrap"
+                                  >
+                                    İade Et
+                                  </button>
+                                )
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {order.status === 'cancelled' && (
                     <div className="mx-6 mb-5 flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
@@ -371,6 +513,97 @@ const OrderHistoryPage: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Return Modal */}
+      {returnOrder && returnItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-strong rounded-3xl p-8 max-w-md w-full mx-4 border border-white/10 animate-fade-up">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-black text-fg">Bilet İade Talebi</h3>
+              <button
+                onClick={() => { setReturnOrder(null); setReturnItem(null); }}
+                className="text-muted hover:text-fg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {returnSuccess ? (
+              <div className="text-center py-6 space-y-3">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                  <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-bold text-emerald-400">Talebiniz Alındı</h4>
+                <p className="text-xs text-muted leading-relaxed">
+                  İade talebiniz başarıyla oluşturulmuştur. Finans birimi inceledikten sonra 3-5 iş günü içinde geri ödeme yapılacaktır.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleReturnSubmit} className="space-y-5">
+                <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-2">
+                  <p className="text-xs text-muted uppercase font-bold tracking-wider">Etkinlik</p>
+                  <p className="font-bold text-fg text-sm">{returnItem.name}</p>
+                  <p className="text-xs text-muted">{returnItem.date} · {returnItem.venue}</p>
+                  <div className="flex justify-between items-center pt-2 border-t border-white/5 mt-2">
+                    <span className="text-xs text-muted">Bilet Fiyatı:</span>
+                    <span className="font-bold text-fg text-sm">₺{returnItem.price}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted uppercase tracking-widest">İade Edilecek Adet</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="1"
+                      max={returnItem.quantity}
+                      value={returnQty}
+                      onChange={(e) => setReturnQty(Number(e.target.value))}
+                      className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                    />
+                    <span className="w-12 text-center py-1.5 rounded-xl bg-white/5 border border-white/10 text-fg text-sm font-bold">
+                      {returnQty}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted-2">Satın alınan toplam bilet: {returnItem.quantity}</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-muted uppercase tracking-widest">İade Nedeni</label>
+                  <textarea
+                    required
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="İade etme nedeninizi giriniz..."
+                    className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-500/50 transition-all min-h-[90px] resize-none"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setReturnOrder(null); setReturnItem(null); }}
+                    className="flex-1 btn-ghost py-3 text-xs font-bold rounded-xl"
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={returnLoading}
+                    className="flex-1 btn-gradient py-3 text-xs font-bold rounded-xl shadow-teal/20"
+                  >
+                    {returnLoading ? 'Gönderiliyor...' : 'İade Talebi Oluştur'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

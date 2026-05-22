@@ -3,7 +3,7 @@ import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 from fastapi import APIRouter, Header, HTTPException, Depends
-from typing import List
+from typing import List, Optional
 from app.core.config import supabase
 from app.schemas.order import CreateOrder
 from datetime import datetime, timezone
@@ -291,12 +291,25 @@ async def get_orders(user=Depends(get_current_user)):
     items_res = supabase.table("order_items").select("*").in_("order_id", order_ids).execute()
     items_data = items_res.data
     
+    # Fetch all returns for user to match against items
+    returns_res = supabase.table("returns").select("*").eq("user_id", str(user_id)).execute()
+    returns_by_item = {}
+    for r in (returns_res.data or []):
+        returns_by_item[r["order_item_id"]] = {
+            "status": r["status"],
+            "quantity": r["quantity"],
+            "price": r["price"],
+            "reason": r.get("reason")
+        }
+
     # Group items by order
     items_by_order = {}
     for item in items_data:
         oid = item["order_id"]
         if oid not in items_by_order:
             items_by_order[oid] = []
+        
+        ret_info = returns_by_item.get(item["id"])
         items_by_order[oid].append({
             "id": item["id"],
             "event_id": item["event_id"],
@@ -304,7 +317,9 @@ async def get_orders(user=Depends(get_current_user)):
             "date": item["event_date"],
             "venue": item["venue"],
             "quantity": item["quantity"],
-            "price": item["price"]
+            "price": item["price"],
+            "category": item.get("category"),
+            "return_info": ret_info
         })
         
     result = []
@@ -361,11 +376,24 @@ async def get_all_orders(user=Depends(get_current_user)):
     items_res = supabase.table("order_items").select("*").in_("order_id", order_ids).execute()
     items_data = items_res.data
     
+    # Fetch returns for these order items to show admin
+    returns_res = supabase.table("returns").select("*").in_("order_id", order_ids).execute()
+    returns_by_item = {}
+    for r in (returns_res.data or []):
+        returns_by_item[r["order_item_id"]] = {
+            "status": r["status"],
+            "quantity": r["quantity"],
+            "price": r["price"],
+            "reason": r.get("reason")
+        }
+
     items_by_order = {}
     for item in items_data:
         oid = item["order_id"]
         if oid not in items_by_order:
             items_by_order[oid] = []
+        
+        ret_info = returns_by_item.get(item["id"])
         items_by_order[oid].append({
             "id": item["id"],
             "event_id": item["event_id"],
@@ -373,7 +401,9 @@ async def get_all_orders(user=Depends(get_current_user)):
             "date": item["event_date"],
             "venue": item["venue"],
             "quantity": item["quantity"],
-            "price": item["price"]
+            "price": item["price"],
+            "category": item.get("category"),
+            "return_info": ret_info
         })
     
     result = []
@@ -470,3 +500,185 @@ async def redeem_ticket(token: str, user=Depends(get_current_user)):
         "used_at": datetime.now(timezone.utc).isoformat()
     }).eq("token", token).execute()
     return {"success": True}
+
+
+class ReturnPayload(BaseModel):
+    order_item_id: int
+    quantity: int
+    reason: Optional[str] = None
+
+
+@router.post("/orders/{order_id}/return")
+async def request_order_return(order_id: str, payload: ReturnPayload, user=Depends(get_current_user)):
+    try:
+        real_order_id = normalize_order_id(order_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Geçersiz sipariş ID formatı")
+
+    if payload.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Miktar sıfırdan büyük olmalıdır")
+
+    order_res = supabase.table("orders").select("*").eq("id", real_order_id).eq("user_id", str(user.id)).single().execute()
+    if not order_res.data:
+        raise HTTPException(status_code=404, detail="Sipariş bulunamadı veya yetkisiz erişim")
+    
+    order_data = order_res.data
+    created_at_str = order_data.get("created_at")
+    
+    try:
+        created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        diff = now - created_at
+        if diff.days > 30:
+            raise HTTPException(status_code=400, detail="İade süresi (30 gün) dolmuştur")
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+
+    item_res = supabase.table("order_items").select("*").eq("id", payload.order_item_id).eq("order_id", real_order_id).single().execute()
+    if not item_res.data:
+        raise HTTPException(status_code=404, detail="Sipariş kalemi bulunamadı")
+    
+    item_data = item_res.data
+    purchased_qty = item_data["quantity"]
+    purchase_price = float(item_data["price"])
+
+    existing_returns_res = supabase.table("returns").select("quantity").eq("order_item_id", payload.order_item_id).neq("status", "rejected").execute()
+    existing_qty = sum(r["quantity"] for r in (existing_returns_res.data or []))
+    
+    if existing_qty + payload.quantity > purchased_qty:
+        raise HTTPException(status_code=400, detail=f"Maksimum iade edilebilecek miktar: {purchased_qty - existing_qty}")
+
+    return_data = {
+        "order_id": real_order_id,
+        "order_item_id": payload.order_item_id,
+        "user_id": str(user.id),
+        "quantity": payload.quantity,
+        "price": purchase_price,
+        "status": "pending",
+        "reason": payload.reason
+    }
+    
+    insert_res = supabase.table("returns").insert(return_data).execute()
+    if not insert_res.data:
+        raise HTTPException(status_code=500, detail="İade talebi oluşturulamadı")
+        
+    return insert_res.data[0]
+
+
+@router.get("/admin/returns")
+async def get_admin_returns(user=Depends(get_current_user)):
+    role = get_user_role(user)
+    if role not in ("sales_manager", "product_manager"):
+        raise HTTPException(status_code=403, detail="Yetkisiz erişim")
+        
+    returns_res = supabase.table("returns").select("*").order("created_at", desc=True).execute()
+    returns_data = returns_res.data or []
+    
+    if not returns_data:
+        return []
+        
+    order_ids = list({r["order_id"] for r in returns_data})
+    order_item_ids = list({r["order_item_id"] for r in returns_data})
+    
+    orders_res = supabase.table("orders").select("id, user_name, user_email").in_("id", order_ids).execute()
+    orders_map = {o["id"]: o for o in (orders_res.data or [])}
+    
+    items_res = supabase.table("order_items").select("id, event_name, category").in_("id", order_item_ids).execute()
+    items_map = {i["id"]: i for i in (items_res.data or [])}
+    
+    enriched = []
+    for r in returns_data:
+        o = orders_map.get(r["order_id"]) or {}
+        item = items_map.get(r["order_item_id"]) or {}
+        
+        c_at = r.get("created_at")
+        try:
+            dt = datetime.fromisoformat(c_at.replace("Z", "+00:00"))
+            date_str = dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            date_str = c_at
+            
+        enriched.append({
+            "id": r["id"],
+            "order_id": format_order_id(r["order_id"]),
+            "raw_order_id": r["order_id"],
+            "order_item_id": r["order_item_id"],
+            "user_id": r["user_id"],
+            "user_name": o.get("user_name") or "Bilinmeyen Müşteri",
+            "user_email": o.get("user_email") or "",
+            "event_name": item.get("event_name") or "Etkinlik",
+            "category": item.get("category") or "Bilet",
+            "quantity": r["quantity"],
+            "price": r["price"],
+            "refund_amount": round(r["quantity"] * r["price"], 2),
+            "status": r["status"],
+            "reason": r.get("reason") or "",
+            "date": date_str
+        })
+        
+    return enriched
+
+
+@router.patch("/admin/returns/{return_id}/approve")
+async def approve_return_request(return_id: str, user=Depends(get_current_user)):
+    role = get_user_role(user)
+    if role != "sales_manager":
+        raise HTTPException(status_code=403, detail="Sadece Sales Manager iade taleplerini onaylayabilir")
+        
+    return_res = supabase.table("returns").select("*").eq("id", return_id).single().execute()
+    if not return_res.data:
+        raise HTTPException(status_code=404, detail="İade talebi bulunamadı")
+    r_data = return_res.data
+    
+    if r_data["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Bu talep zaten sonuçlandırılmış")
+        
+    order_item_res = supabase.table("order_items").select("event_id, category").eq("id", r_data["order_item_id"]).single().execute()
+    if order_item_res.data:
+        oi_data = order_item_res.data
+        event_id = oi_data["event_id"]
+        category = oi_data.get("category")
+        qty = r_data["quantity"]
+        
+        event_res = supabase.table("events").select("remaining_capacity, ticket_categories").eq("id", event_id).execute()
+        if event_res.data:
+            ev_data = event_res.data[0]
+            update_payload = {}
+            
+            rem_cap = ev_data.get("remaining_capacity")
+            if rem_cap is not None:
+                update_payload["remaining_capacity"] = rem_cap + qty
+                
+            categories = ev_data.get("ticket_categories")
+            if categories and category and isinstance(categories, list):
+                for cat in categories:
+                    if isinstance(cat, dict) and cat.get("name") == category:
+                        cat_rem = cat.get("remaining")
+                        if cat_rem is not None:
+                            cat["remaining"] = cat_rem + qty
+                        break
+                update_payload["ticket_categories"] = categories
+                
+            if update_payload:
+                supabase.table("events").update(update_payload).eq("id", event_id).execute()
+
+    update_res = supabase.table("returns").update({"status": "approved", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", return_id).execute()
+    return {"success": True, "data": update_res.data[0]}
+
+
+@router.patch("/admin/returns/{return_id}/reject")
+async def reject_return_request(return_id: str, user=Depends(get_current_user)):
+    role = get_user_role(user)
+    if role != "sales_manager":
+        raise HTTPException(status_code=403, detail="Sadece Sales Manager iade taleplerini reddedebilir")
+        
+    return_res = supabase.table("returns").select("status").eq("id", return_id).single().execute()
+    if not return_res.data:
+        raise HTTPException(status_code=404, detail="İade talebi bulunamadı")
+    if return_res.data["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Bu talep zaten sonuçlandırılmış")
+        
+    update_res = supabase.table("returns").update({"status": "rejected", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", return_id).execute()
+    return {"success": True, "data": update_res.data[0]}
+

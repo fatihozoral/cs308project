@@ -33,6 +33,12 @@ interface Event {
   image_url?: string;
   accent: string;
   remaining_capacity?: number;
+  model?: string;
+  serial_number?: string;
+  warranty_status?: string;
+  distributor_info?: string;
+  original_price?: number;
+  discount_rate?: number;
 }
 
 interface Props {
@@ -69,6 +75,7 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
   const [submitted, setSubmitted] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [showSpecs, setShowSpecs] = useState(true);
 
   useEffect(() => {
     if (!event) return;
@@ -119,7 +126,6 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
       setContent('');
       setRating(5);
       if (!content.trim()) {
-        // rating-only: reload comments so average updates immediately
         const res = await axios.get(`${API_URL}/comments/event/${event.id}`);
         setComments(res.data);
         setSubmitted(false);
@@ -199,7 +205,17 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
           <div className="flex items-center justify-between gap-4 bg-surface-2 border border-border rounded-2xl px-5 py-4">
             <div>
               <p className="text-xs text-muted font-medium mb-0.5">Bilet Fiyatı</p>
-              <p className="text-3xl font-black text-fg">₺{event.price}</p>
+              <div className="flex items-baseline gap-2.5 flex-wrap">
+                <p className="text-3xl font-black text-fg">₺{event.price}</p>
+                {event.discount_rate && event.discount_rate > 0 && event.original_price && (
+                  <>
+                    <p className="text-sm text-muted line-through">₺{event.original_price}</p>
+                    <span className="text-[10px] font-bold text-rose-400 bg-rose-400/10 border border-rose-400/30 px-2 py-0.5 rounded-full">
+                      %{event.discount_rate} İndirim
+                    </span>
+                  </>
+                )}
+              </div>
               {event.remaining_capacity !== undefined && (
                 <div className={`inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-pill border text-xs font-bold ${soldOut ? 'bg-red-500/10 border-red-400/40 text-red-300' : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/30 text-teal-DEFAULT'}`}>
                   <span className={`w-2 h-2 rounded-full ${soldOut ? 'bg-red-400' : 'bg-teal-DEFAULT'}`} />
@@ -224,6 +240,50 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
               </button>
             </div>
           </div>
+
+          {/* Collapsible Tech Specs */}
+          {(event.model || event.serial_number || event.warranty_status || event.distributor_info) && (
+            <div className="border border-border/80 rounded-2xl p-4 bg-surface-2/30">
+              <button
+                type="button"
+                onClick={() => setShowSpecs(!showSpecs)}
+                className="w-full flex items-center justify-between font-bold text-fg group focus:outline-none"
+              >
+                <span className="text-sm">Teknik Özellikler</span>
+                <span className={`text-teal-DEFAULT transition-transform duration-200 text-xs ${showSpecs ? 'rotate-180' : ''}`}>
+                  ▼
+                </span>
+              </button>
+              {showSpecs && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3.5 animate-fade-in">
+                  {event.model && (
+                    <div className="p-3 bg-surface-2/50 border border-border/60 rounded-xl">
+                      <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">Model</p>
+                      <p className="text-xs font-bold text-fg mt-0.5">{event.model}</p>
+                    </div>
+                  )}
+                  {event.serial_number && (
+                    <div className="p-3 bg-surface-2/50 border border-border/60 rounded-xl">
+                      <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">Seri Numarası</p>
+                      <p className="text-xs font-bold text-fg mt-0.5">{event.serial_number}</p>
+                    </div>
+                  )}
+                  {event.warranty_status && (
+                    <div className="p-3 bg-surface-2/50 border border-border/60 rounded-xl">
+                      <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">Garanti Durumu</p>
+                      <p className="text-xs font-bold text-fg mt-0.5">{event.warranty_status}</p>
+                    </div>
+                  )}
+                  {event.distributor_info && (
+                    <div className="p-3 bg-surface-2/50 border border-border/60 rounded-xl">
+                      <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">Distribütör Bilgileri</p>
+                      <p className="text-xs font-bold text-fg mt-0.5">{event.distributor_info}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Comments */}
           <div>

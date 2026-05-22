@@ -1,7 +1,7 @@
 /**
  * Admin Sales Page
  * CS 308 Online Ticketing Project - TypeScript
- * Sales Manager Dashboard - Revenue chart + Invoice list
+ * Sales Manager Dashboard - Revenue chart + Invoice list + Campaigns & Returns
  */
 
 import React, { useState, useEffect } from 'react';
@@ -48,8 +48,18 @@ const AdminSalesPage: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // New states for campaigns and returns
+  const [activeTab, setActiveTab] = useState<'finance' | 'discounts' | 'returns'>('finance');
+  const [events, setEvents] = useState<any[]>([]);
+  const [discountLoading, setDiscountLoading] = useState(false);
+  const [localDiscounts, setLocalDiscounts] = useState<Record<number, number>>({});
+  const [returns, setReturns] = useState<any[]>([]);
+  const [returnsLoading, setReturnsLoading] = useState(false);
+
   useEffect(() => {
     fetchOrders();
+    fetchEvents();
+    fetchReturns();
   }, []);
 
   const fetchOrders = async () => {
@@ -65,8 +75,65 @@ const AdminSalesPage: React.FC = () => {
     }
   };
 
+  const fetchEvents = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/events`);
+      setEvents(res.data);
+    } catch (err) {
+      console.error("Etkinlikler yüklenemedi:", err);
+    }
+  };
+
+  const fetchReturns = async () => {
+    setReturnsLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/admin/returns`, { headers: getAuthHeader() });
+      setReturns(res.data);
+    } catch (err) {
+      console.error("İade talepleri yüklenemedi:", err);
+      setReturns([]);
+    } finally {
+      setReturnsLoading(false);
+    }
+  };
+
+  const handleUpdateDiscount = async (eventId: number, discountRate: number) => {
+    setDiscountLoading(true);
+    try {
+      await axios.patch(`${API_URL}/admin/events/${eventId}/discount`, { discount_rate: discountRate }, { headers: getAuthHeader() });
+      setEvents(prev => prev.map(ev => ev.id === eventId ? { ...ev, discount_rate: discountRate, price: ev.original_price ? ev.original_price * (1 - discountRate/100) : ev.price } : ev));
+      alert("İndirim başarıyla güncellendi ve istek listesindeki kullanıcılara bildirim gönderildi!");
+      fetchEvents();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "İndirim güncellenemedi.");
+    } finally {
+      setDiscountLoading(false);
+    }
+  };
+
+  const handleApproveReturn = async (returnId: string) => {
+    try {
+      await axios.patch(`${API_URL}/admin/returns/${returnId}/approve`, {}, { headers: getAuthHeader() });
+      setReturns(prev => prev.map(r => r.id === returnId ? { ...r, status: 'approved' } : r));
+      alert("İade talebi onaylandı ve bilet kapasitesi otomatik olarak geri yüklendi!");
+      fetchReturns();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "İade talebi onaylanamadı.");
+    }
+  };
+
+  const handleRejectReturn = async (returnId: string) => {
+    try {
+      await axios.patch(`${API_URL}/admin/returns/${returnId}/reject`, {}, { headers: getAuthHeader() });
+      setReturns(prev => prev.map(r => r.id === returnId ? { ...r, status: 'rejected' } : r));
+      alert("İade talebi reddedildi.");
+      fetchReturns();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "İade talebi reddedilemedi.");
+    }
+  };
+
   const parseDate = (dateStr: string): Date => {
-    // handles "DD.MM.YYYY" and "YYYY-MM-DD"
     if (dateStr.includes('.')) {
       const [d, m, y] = dateStr.split('.');
       return new Date(`${y}-${m}-${d}`);
@@ -88,18 +155,14 @@ const AdminSalesPage: React.FC = () => {
     return 'processing';
   };
 
-
-
   const revenueOrders = filtered.filter(o => normalizeStatus(o.status) !== 'cancelled');
   const completedOrders = filtered.filter(o => normalizeStatus(o.status) === 'delivered');
   const cancelledOrders = filtered.filter(o => normalizeStatus(o.status) === 'cancelled');
   const completedRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
 
-  // Requirement 11: Estimated Expenses (Maliyet/Zarar) and Net Profit (Net Kar)
   const estimatedExpenses = completedRevenue * 0.4;
   const estimatedNetProfit = completedRevenue * 0.6;
 
-  // Build chart data — group by date
   const revenueByDate: Record<string, number> = {};
   revenueOrders.forEach(o => {
     const key = o.date;
@@ -171,289 +234,495 @@ const AdminSalesPage: React.FC = () => {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-8 py-12 space-y-8">
+      <div className="max-w-7xl mx-auto px-8 py-10 space-y-10">
 
-        {/* Page title */}
-        <div className="animate-fade-up">
-          <h1 className="text-4xl font-black text-fg tracking-tight">Satış Paneli</h1>
-          <p className="text-muted mt-1">Gelir analizi ve fatura yönetimi</p>
+        {/* Tab Selector */}
+        <div className="flex gap-2.5 border-b border-white/10 pb-4 animate-fade-up">
+          <button
+            onClick={() => setActiveTab('finance')}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'finance'
+                ? 'bg-gradient-cta text-bg shadow-lg shadow-teal-500/20'
+                : 'btn-ghost text-muted hover:text-fg'
+            }`}
+          >
+            📊 Finansal Analiz
+          </button>
+          <button
+            onClick={() => setActiveTab('discounts')}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'discounts'
+                ? 'bg-gradient-cta text-bg shadow-lg shadow-teal-500/20'
+                : 'btn-ghost text-muted hover:text-fg'
+            }`}
+          >
+            🏷️ Kampanyalar & İndirimler
+          </button>
+          <button
+            onClick={() => setActiveTab('returns')}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'returns'
+                ? 'bg-gradient-cta text-bg shadow-lg shadow-teal-500/20'
+                : 'btn-ghost text-muted hover:text-fg'
+            }`}
+          >
+            🔄 İade Talepleri
+          </button>
         </div>
 
-        {/* Date filter */}
-        <div className="glass rounded-2xl px-6 py-4 flex flex-wrap items-center gap-4 animate-fade-up">
-          <span className="text-sm font-semibold text-muted">Tarih Aralığı:</span>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inputCls} />
-          <span className="text-muted text-sm">—</span>
-          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={inputCls} />
-          {(startDate || endDate) && (
-            <button onClick={() => { setStartDate(''); setEndDate(''); }}
-              className="text-xs text-teal-DEFAULT hover:underline font-medium">
-              Temizle
-            </button>
-          )}
-        </div>
-
-        {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 animate-fade-up">
-          {[
-            { label: 'Toplam Gelir (Ciro)', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', accent: 'text-teal-DEFAULT' },
-            { label: 'Tahmini Gider (%40)', value: `₺${estimatedExpenses.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📉', accent: 'text-red-400' },
-            { label: 'Tahmini Net Kar (%60)', value: `₺${estimatedNetProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📈', accent: 'text-teal-accent' },
-            { label: 'Toplam Sipariş', value: filtered.length, icon: '🎟️', accent: 'text-fg' },
-            { label: 'Tamamlanan', value: completedOrders.length, icon: '✅', accent: 'text-teal-DEFAULT' },
-            { label: 'İptal Edilen', value: cancelledOrders.length, icon: '❌', accent: 'text-red-400' },
-          ].map(({ label, value, icon, accent }) => (
-            <div key={label} className="glass-strong rounded-2xl p-5 hover:scale-[1.02] transition-transform duration-200">
-              <p className="text-2xl mb-2">{icon}</p>
-              <p className={`text-xl font-black ${accent} truncate`}>{value}</p>
-              <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-medium">{label}</p>
+        {/* TAB 1: FINANCE */}
+        {activeTab === 'finance' && (
+          <div className="space-y-8 animate-fade-up">
+            {/* Page title */}
+            <div>
+              <h1 className="text-4xl font-black text-fg tracking-tight">Satış Paneli</h1>
+              <p className="text-muted mt-1">Gelir analizi ve fatura yönetimi</p>
             </div>
-          ))}
-        </div>
 
-        {/* Revenue chart */}
-        {chartData.length > 0 && (
-          <div className="glass-strong rounded-3xl p-6 animate-fade-up">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="font-bold text-fg text-lg">Günlük Finansal Grafik</h2>
-                <p className="text-xs text-muted mt-1">Son 14 günün ciro ve net kar dağılımı</p>
-                {/* Legend */}
-                <div className="flex items-center gap-4 mt-3">
-                  <div className="flex items-center gap-1.5 text-xs text-fg">
-                    <span className="w-3 h-1 bg-teal-DEFAULT rounded-full" />
-                    <span>Ciro (Gelir)</span>
+            {/* Date filter */}
+            <div className="glass rounded-2xl px-6 py-4 flex flex-wrap items-center gap-4">
+              <span className="text-sm font-semibold text-muted">Tarih Aralığı:</span>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={inputCls} />
+              <span className="text-muted text-sm">—</span>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className={inputCls} />
+              {(startDate || endDate) && (
+                <button onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="text-xs text-teal-DEFAULT hover:underline font-medium">
+                  Temizle
+                </button>
+              )}
+            </div>
+
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { label: 'Toplam Gelir (Ciro)', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', accent: 'text-teal-DEFAULT' },
+                { label: 'Tahmini Gider (%40)', value: `₺${estimatedExpenses.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📉', accent: 'text-red-400' },
+                { label: 'Tahmini Net Kar (%60)', value: `₺${estimatedNetProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📈', accent: 'text-teal-accent' },
+                { label: 'Toplam Sipariş', value: filtered.length, icon: '🎟️', accent: 'text-fg' },
+                { label: 'Tamamlanan', value: completedOrders.length, icon: '✅', accent: 'text-teal-DEFAULT' },
+                { label: 'İptal Edilen', value: cancelledOrders.length, icon: '❌', accent: 'text-red-400' },
+              ].map(({ label, value, icon, accent }) => (
+                <div key={label} className="glass-strong rounded-2xl p-5 hover:scale-[1.02] transition-transform duration-200">
+                  <p className="text-2xl mb-2">{icon}</p>
+                  <p className={`text-xl font-black ${accent} truncate`}>{value}</p>
+                  <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-medium">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Revenue chart */}
+            {chartData.length > 0 && (
+              <div className="glass-strong rounded-3xl p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="font-bold text-fg text-lg">Günlük Finansal Grafik</h2>
+                    <p className="text-xs text-muted mt-1">Son 14 günün ciro ve net kar dağılımı</p>
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 mt-3">
+                      <div className="flex items-center gap-1.5 text-xs text-fg">
+                        <span className="w-3 h-1 bg-teal-DEFAULT rounded-full" />
+                        <span>Ciro (Gelir)</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-fg">
+                        <span className="w-3 h-1 bg-violet-400 rounded-full" />
+                        <span>Net Kar (%60)</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-fg">
-                    <span className="w-3 h-1 bg-violet-400 rounded-full" />
-                    <span>Net Kar (%60)</span>
+                  <div className="text-right glass px-4 py-2 rounded-xl">
+                    <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Tepe Gün Geliri</p>
+                    <p className="text-base font-black text-teal-DEFAULT">₺{maxVal.toLocaleString('tr-TR')}</p>
                   </div>
                 </div>
-              </div>
-              <div className="text-right glass px-4 py-2 rounded-xl">
-                <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Tepe Gün Geliri</p>
-                <p className="text-base font-black text-teal-DEFAULT">₺{maxVal.toLocaleString('tr-TR')}</p>
-              </div>
-            </div>
 
-            <div className="w-full overflow-x-auto">
-              <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="min-w-[760px] w-full h-[300px]" role="img" aria-label="Günlük gelir ve kar grafiği">
-                <defs>
-                  <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.01" />
-                  </linearGradient>
-                  <linearGradient id="revenueLine" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="rgb(45, 212, 191)" />
-                    <stop offset="100%" stopColor="rgb(20, 184, 166)" />
-                  </linearGradient>
-                  <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgb(139, 92, 246)" stopOpacity="0.25" />
-                    <stop offset="100%" stopColor="rgb(139, 92, 246)" stopOpacity="0.01" />
-                  </linearGradient>
-                  <linearGradient id="profitLine" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="rgb(167, 139, 250)" />
-                    <stop offset="100%" stopColor="rgb(139, 92, 246)" />
-                  </linearGradient>
-                </defs>
+                <div className="w-full overflow-x-auto">
+                  <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="min-w-[760px] w-full h-[300px]" role="img" aria-label="Günlük gelir ve kar grafiği">
+                    <defs>
+                      <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.01" />
+                      </linearGradient>
+                      <linearGradient id="revenueLine" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="rgb(45, 212, 191)" />
+                        <stop offset="100%" stopColor="rgb(20, 184, 166)" />
+                      </linearGradient>
+                      <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="rgb(139, 92, 246)" stopOpacity="0.25" />
+                        <stop offset="100%" stopColor="rgb(139, 92, 246)" stopOpacity="0.01" />
+                      </linearGradient>
+                      <linearGradient id="profitLine" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="rgb(167, 139, 250)" />
+                        <stop offset="100%" stopColor="rgb(139, 92, 246)" />
+                      </linearGradient>
+                    </defs>
 
-                {yTicks.map(tick => (
-                  <g key={tick.y}>
+                    {yTicks.map(tick => (
+                      <g key={tick.y}>
+                        <line
+                          x1={CHART_PAD.left}
+                          x2={CHART_WIDTH - CHART_PAD.right}
+                          y1={tick.y}
+                          y2={tick.y}
+                          stroke="rgba(148, 163, 184, 0.14)"
+                          strokeWidth="1"
+                        />
+                        <text x={CHART_PAD.left - 12} y={tick.y + 4} textAnchor="end" className="fill-slate-500 text-[11px]">
+                          ₺{tick.value.toLocaleString('tr-TR')}
+                        </text>
+                      </g>
+                    ))}
+
+                    <line
+                      x1={CHART_PAD.left}
+                      x2={CHART_PAD.left}
+                      y1={CHART_PAD.top}
+                      y2={CHART_PAD.top + plotHeight}
+                      stroke="rgba(148, 163, 184, 0.2)"
+                    />
                     <line
                       x1={CHART_PAD.left}
                       x2={CHART_WIDTH - CHART_PAD.right}
-                      y1={tick.y}
-                      y2={tick.y}
-                      stroke="rgba(148, 163, 184, 0.14)"
-                      strokeWidth="1"
+                      y1={CHART_PAD.top + plotHeight}
+                      y2={CHART_PAD.top + plotHeight}
+                      stroke="rgba(148, 163, 184, 0.2)"
                     />
-                    <text x={CHART_PAD.left - 12} y={tick.y + 4} textAnchor="end" className="fill-slate-500 text-[11px]">
-                      ₺{tick.value.toLocaleString('tr-TR')}
-                    </text>
-                  </g>
-                ))}
 
-                <line
-                  x1={CHART_PAD.left}
-                  x2={CHART_PAD.left}
-                  y1={CHART_PAD.top}
-                  y2={CHART_PAD.top + plotHeight}
-                  stroke="rgba(148, 163, 184, 0.2)"
-                />
-                <line
-                  x1={CHART_PAD.left}
-                  x2={CHART_WIDTH - CHART_PAD.right}
-                  y1={CHART_PAD.top + plotHeight}
-                  y2={CHART_PAD.top + plotHeight}
-                  stroke="rgba(148, 163, 184, 0.2)"
-                />
-
-                {/* Revenue area & line */}
-                <path d={areaPath} fill="url(#revenueArea)" />
-                {chartData.length > 1 ? (
-                  <polyline points={linePoints} fill="none" stroke="url(#revenueLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                ) : (
-                  <line
-                    x1={CHART_PAD.left + plotWidth * 0.35}
-                    x2={CHART_PAD.left + plotWidth * 0.65}
-                    y1={getY(chartData[0].revenue)}
-                    y2={getY(chartData[0].revenue)}
-                    stroke="url(#revenueLine)"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* Profit area & line */}
-                <path d={profitAreaPath} fill="url(#profitArea)" />
-                {chartData.length > 1 ? (
-                  <polyline points={profitLinePoints} fill="none" stroke="url(#profitLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                ) : (
-                  <line
-                    x1={CHART_PAD.left + plotWidth * 0.35}
-                    x2={CHART_PAD.left + plotWidth * 0.65}
-                    y1={getY(chartData[0].profit)}
-                    y2={getY(chartData[0].profit)}
-                    stroke="url(#profitLine)"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {chartData.map((point, index) => {
-                  const x = getX(index);
-                  const yRev = getY(point.revenue);
-                  const yProf = getY(point.profit);
-                  return (
-                    <g key={point.date}>
+                    {/* Revenue area & line */}
+                    <path d={areaPath} fill="url(#revenueArea)" />
+                    {chartData.length > 1 ? (
+                      <polyline points={linePoints} fill="none" stroke="url(#revenueLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                    ) : (
                       <line
-                        x1={x}
-                        x2={x}
-                        y1={yRev}
-                        y2={CHART_PAD.top + plotHeight}
-                        stroke="rgba(45, 212, 191, 0.12)"
-                        strokeDasharray="4 5"
+                        x1={CHART_PAD.left + plotWidth * 0.35}
+                        x2={CHART_PAD.left + plotWidth * 0.65}
+                        y1={getY(chartData[0].revenue)}
+                        y2={getY(chartData[0].revenue)}
+                        stroke="url(#revenueLine)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
                       />
-                      
-                      {/* Revenue point & label */}
-                      <circle cx={x} cy={yRev} r="6" fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth="2.5" />
-                      <circle cx={x} cy={yRev} r="2.5" fill="rgb(45, 212, 191)" />
-                      <text x={x} y={yRev - 12} textAnchor="middle" className="fill-teal-300 text-[10px] font-bold">
-                        ₺{Math.round(point.revenue).toLocaleString('tr-TR')}
-                      </text>
+                    )}
 
-                      {/* Profit point & label */}
-                      <circle cx={x} cy={yProf} r="6" fill="rgb(17, 24, 39)" stroke="rgb(167, 139, 250)" strokeWidth="2.5" />
-                      <circle cx={x} cy={yProf} r="2.5" fill="rgb(167, 139, 250)" />
-                      <text x={x} y={yProf + 16} textAnchor="middle" className="fill-violet-300 text-[10px] font-bold">
-                        ₺{Math.round(point.profit).toLocaleString('tr-TR')}
-                      </text>
+                    {/* Profit area & line */}
+                    <path d={profitAreaPath} fill="url(#profitArea)" />
+                    {chartData.length > 1 ? (
+                      <polyline points={profitLinePoints} fill="none" stroke="url(#profitLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                    ) : (
+                      <line
+                        x1={CHART_PAD.left + plotWidth * 0.35}
+                        x2={CHART_PAD.left + plotWidth * 0.65}
+                        y1={getY(chartData[0].profit)}
+                        y2={getY(chartData[0].profit)}
+                        stroke="url(#profitLine)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                      />
+                    )}
 
-                      <text x={x} y={CHART_HEIGHT - 16} textAnchor="middle" className="fill-slate-400 text-[11px]">
-                        {point.label}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+                    {chartData.map((point, index) => {
+                      const x = getX(index);
+                      const yRev = getY(point.revenue);
+                      const yProf = getY(point.profit);
+                      return (
+                        <g key={point.date}>
+                          <line
+                            x1={x}
+                            x2={x}
+                            y1={yRev}
+                            y2={CHART_PAD.top + plotHeight}
+                            stroke="rgba(45, 212, 191, 0.12)"
+                            strokeDasharray="4 5"
+                          />
+                          
+                          {/* Revenue point & label */}
+                          <circle cx={x} cy={yRev} r="6" fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth="2.5" />
+                          <circle cx={x} cy={yRev} r="2.5" fill="rgb(45, 212, 191)" />
+                          <text x={x} y={yRev - 12} textAnchor="middle" className="fill-teal-300 text-[10px] font-bold">
+                            ₺{Math.round(point.revenue).toLocaleString('tr-TR')}
+                          </text>
+
+                          {/* Profit point & label */}
+                          <circle cx={x} cy={yProf} r="6" fill="rgb(17, 24, 39)" stroke="rgb(167, 139, 250)" strokeWidth="2.5" />
+                          <circle cx={x} cy={yProf} r="2.5" fill="rgb(167, 139, 250)" />
+                          <text x={x} y={yProf + 16} textAnchor="middle" className="fill-violet-300 text-[10px] font-bold">
+                            ₺{Math.round(point.profit).toLocaleString('tr-TR')}
+                          </text>
+
+                          <text x={x} y={CHART_HEIGHT - 16} textAnchor="middle" className="fill-slate-400 text-[11px]">
+                            {point.label}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              </div>
+            )}
+
+            {/* Invoice list */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-fg">Fatura Listesi</h2>
+                <span className="text-xs text-muted">{filtered.length} sipariş</span>
+              </div>
+
+              {loading ? (
+                <div className="glass rounded-2xl p-12 text-center text-muted">Yükleniyor...</div>
+              ) : filtered.length === 0 ? (
+                <div className="glass rounded-2xl p-12 text-center">
+                  <p className="text-4xl mb-3">📋</p>
+                  <p className="text-muted">Bu tarih aralığında sipariş bulunamadı</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map((order, i) => {
+                    const normalizedStatus = normalizeStatus(order.status);
+                    const sc = statusCfg[normalizedStatus] || statusCfg.processing;
+                    const isExpanded = expandedId === order.id;
+                    return (
+                      <div key={order.id}
+                        className="glass hover:glass-strong rounded-2xl overflow-hidden transition-all"
+                        style={{ animationDelay: `${i * 0.04}s` }}>
+                        {/* Row */}
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : order.id)}
+                          className="w-full flex items-center justify-between px-6 py-4 text-left">
+                          <div className="flex items-center gap-6">
+                            <p className="font-mono font-bold text-fg text-sm">{order.id}</p>
+                            <p className="text-sm text-muted hidden sm:block">{order.date}</p>
+                            {order.user_name && (
+                              <p className="text-sm text-muted hidden md:block">{order.user_name}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-xs font-semibold ${sc.bg} ${sc.text}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>
+                              {sc.label}
+                            </span>
+                            <p className="font-black text-fg">₺{Number(order.total).toLocaleString('tr-TR')}</p>
+                            <svg
+                              className={`w-4 h-4 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                            </svg>
+                          </div>
+                        </button>
+
+                        {/* Expanded items */}
+                        {isExpanded && (
+                          <div className="border-t border-border px-6 py-4 space-y-4">
+                            {/* Customer & Address Details */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/5 rounded-2xl p-4 border border-white/10 text-xs">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Müşteri Bilgileri</p>
+                                <p className="text-fg font-bold mt-1 text-sm">{order.user_name || 'Bilinmeyen Müşteri'}</p>
+                                <p className="text-muted font-mono mt-0.5">{order.user_email || 'E-posta adresi yok'}</p>
+                                {order.tax_id && (
+                                  <p className="text-teal-accent font-semibold mt-1">TC / Vergi No: {order.tax_id}</p>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Teslimat Adresi</p>
+                                <p className="text-fg mt-1 leading-relaxed whitespace-pre-wrap">
+                                  {order.home_address || 'Adres girilmemiş'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Order Items */}
+                            <div className="space-y-3 pt-2">
+                              <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold px-1">Satın Alınan Biletler</p>
+                              {order.items.map(item => (
+                                <div key={item.id} className="flex items-center justify-between text-sm hover:bg-white/5 p-1 rounded-lg transition-colors">
+                                  <div>
+                                    <p className="font-semibold text-fg">{item.name}</p>
+                                    <p className="text-xs text-muted">{item.date} · {item.venue}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-muted">{item.quantity} bilet</p>
+                                    <p className="font-bold text-fg">₺{item.price * item.quantity}</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Invoice list */}
-        <div className="animate-fade-up">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-fg">Fatura Listesi</h2>
-            <span className="text-xs text-muted">{filtered.length} sipariş</span>
-          </div>
-
-          {loading ? (
-            <div className="glass rounded-2xl p-12 text-center text-muted">Yükleniyor...</div>
-          ) : filtered.length === 0 ? (
-            <div className="glass rounded-2xl p-12 text-center">
-              <p className="text-4xl mb-3">📋</p>
-              <p className="text-muted">Bu tarih aralığında sipariş bulunamadı</p>
+        {/* TAB 2: CAMPAIGNS & DISCOUNTS */}
+        {activeTab === 'discounts' && (
+          <div className="space-y-6 animate-fade-up">
+            <div>
+              <h2 className="text-2xl font-black text-fg">Kampanya & İndirim Yönetimi</h2>
+              <p className="text-xs text-muted mt-1">Ürünler üzerinde indirim oranları belirleyebilir, fiyatları düşürebilirsiniz. İndirime giren ürünler istek listesine eklemiş kullanıcılara anlık bildirilecektir.</p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {filtered.map((order, i) => {
-                const normalizedStatus = normalizeStatus(order.status);
-                const sc = statusCfg[normalizedStatus] || statusCfg.processing;
-                const isExpanded = expandedId === order.id;
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {events.map((ev) => {
+                const origPrice = ev.original_price || ev.price;
+                const currentDiscount = localDiscounts[ev.id] !== undefined ? localDiscounts[ev.id] : (ev.discount_rate || 0);
+                const finalPrice = Math.round(origPrice * (1 - currentDiscount / 100));
+
                 return (
-                  <div key={order.id}
-                    className="glass hover:glass-strong rounded-2xl overflow-hidden transition-all animate-fade-up"
-                    style={{ animationDelay: `${i * 0.04}s` }}>
-                    {/* Row */}
-                    <button
-                      onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                      className="w-full flex items-center justify-between px-6 py-4 text-left">
-                      <div className="flex items-center gap-6">
-                        <p className="font-mono font-bold text-fg text-sm">{order.id}</p>
-                        <p className="text-sm text-muted hidden sm:block">{order.date}</p>
-                        {order.user_name && (
-                          <p className="text-sm text-muted hidden md:block">{order.user_name}</p>
+                  <div key={ev.id} className="glass-strong rounded-3xl p-5 flex flex-col justify-between gap-4 border border-white/5">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-teal-DEFAULT uppercase tracking-widest">{ev.category}</span>
+                        {ev.discount_rate > 0 && (
+                          <span className="text-[9px] font-bold text-rose-400 bg-rose-400/10 border border-rose-400/30 px-1.5 py-0.5 rounded-full">
+                            Aktif: %{ev.discount_rate} İndirim
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-pill border text-xs font-semibold ${sc.bg} ${sc.text}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>
-                          {sc.label}
-                        </span>
-                        <p className="font-black text-fg">₺{Number(order.total).toLocaleString('tr-TR')}</p>
-                        <svg
-                          className={`w-4 h-4 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                          fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
-                        </svg>
-                      </div>
-                    </button>
+                      <h3 className="font-bold text-fg text-base mt-2">{ev.name}</h3>
+                      <p className="text-xs text-muted mt-1">📍 {ev.venue}, {ev.city}</p>
+                    </div>
 
-                    {/* Expanded items */}
-                    {isExpanded && (
-                      <div className="border-t border-border px-6 py-4 space-y-4 animate-fade-up">
-                        {/* Customer & Address Details */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white/5 rounded-2xl p-4 border border-white/10 text-xs">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Müşteri Bilgileri</p>
-                            <p className="text-fg font-bold mt-1 text-sm">{order.user_name || 'Bilinmeyen Müşteri'}</p>
-                            <p className="text-muted font-mono mt-0.5">{order.user_email || 'E-posta adresi yok'}</p>
-                            {order.tax_id && (
-                              <p className="text-teal-accent font-semibold mt-1">TC / Vergi No: {order.tax_id}</p>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Teslimat Adresi</p>
-                            <p className="text-fg mt-1 leading-relaxed whitespace-pre-wrap">
-                              {order.home_address || 'Adres girilmemiş'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Order Items */}
-                        <div className="space-y-3 pt-2">
-                          <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold px-1">Satın Alınan Biletler</p>
-                          {order.items.map(item => (
-                            <div key={item.id} className="flex items-center justify-between text-sm hover:bg-white/5 p-1 rounded-lg transition-colors">
-                              <div>
-                                <p className="font-semibold text-fg">{item.name}</p>
-                                <p className="text-xs text-muted">{item.date} · {item.venue}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-xs text-muted">{item.quantity} bilet</p>
-                                <p className="font-bold text-fg">₺{item.price * item.quantity}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+                    <div className="bg-surface-2/40 border border-border/40 rounded-2xl p-3 space-y-2">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-xs text-muted">Orijinal Fiyat:</span>
+                        <span className="text-sm font-semibold text-fg/80">₺{origPrice}</span>
                       </div>
-                    )}
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-xs text-muted">İndirim Oranı:</span>
+                        <span className="text-sm font-black text-rose-400">%{currentDiscount}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline border-t border-white/5 pt-2">
+                        <span className="text-xs text-muted">Yeni Satış Fiyatı:</span>
+                        <span className="text-base font-black text-teal-DEFAULT">₺{finalPrice}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[10px] text-muted">
+                          <span>%0</span>
+                          <span>%90</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="90"
+                          step="5"
+                          value={currentDiscount}
+                          onChange={(e) => setLocalDiscounts(prev => ({ ...prev, [ev.id]: Number(e.target.value) }))}
+                          className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                        />
+                      </div>
+
+                      <button
+                        onClick={() => handleUpdateDiscount(ev.id, currentDiscount)}
+                        disabled={discountLoading || currentDiscount === ev.discount_rate}
+                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          currentDiscount === ev.discount_rate
+                            ? 'bg-white/5 border border-white/10 text-muted cursor-not-allowed'
+                            : 'btn-gradient shadow-md'
+                        }`}
+                      >
+                        {discountLoading ? "Güncelleniyor..." : "İndirimi Uygula"}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* TAB 3: RETURN REQUESTS */}
+        {activeTab === 'returns' && (
+          <div className="space-y-6 animate-fade-up">
+            <div>
+              <h2 className="text-2xl font-black text-fg">İade Talepleri</h2>
+              <p className="text-xs text-muted mt-1">Müşterilerden gelen bilet iade ve geri ödeme (refund) taleplerini onaylayabilir veya reddedebilirsiniz. Onaylanan taleplerin kapasiteleri otomatik olarak ilgili kategoriye geri yüklenir.</p>
+            </div>
+
+            {returnsLoading ? (
+              <div className="glass rounded-2xl p-12 text-center text-muted">Yükleniyor...</div>
+            ) : returns.length === 0 ? (
+              <div className="glass rounded-2xl p-12 text-center text-muted">
+                <p className="text-4xl mb-3">🔄</p>
+                <p>Bekleyen veya geçmiş herhangi bir iade talebi bulunmuyor.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {returns.map((ret) => {
+                  const statusColors: Record<string, string> = {
+                    pending: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+                    approved: 'bg-teal-dim border-teal-DEFAULT/30 text-teal-DEFAULT',
+                    rejected: 'bg-red-500/10 border-red-500/30 text-red-400'
+                  };
+                  const statusLabels: Record<string, string> = {
+                    pending: 'Bekliyor',
+                    approved: 'Onaylandı',
+                    rejected: 'Reddedildi'
+                  };
+
+                  return (
+                    <div key={ret.id} className="glass-strong rounded-3xl p-6 border border-white/5 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="font-mono font-bold text-fg text-sm">{ret.order_id}</span>
+                          <span className="text-xs text-muted">📅 {ret.date}</span>
+                          <span className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${statusColors[ret.status] || 'text-muted'}`}>
+                            {statusLabels[ret.status] || ret.status}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-muted uppercase font-semibold">Geri Ödenecek Tutar</p>
+                          <p className="font-black text-rose-400 text-lg">₺{ret.refund_amount}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted uppercase font-semibold">Müşteri</p>
+                          <p className="font-bold text-fg">{ret.user_name}</p>
+                          <p className="text-muted font-mono">{ret.user_email}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted uppercase font-semibold">Etkinlik & Kategori</p>
+                          <p className="font-bold text-fg">{ret.event_name}</p>
+                          <p className="text-teal-DEFAULT font-semibold">{ret.category}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted uppercase font-semibold">İade Miktarı & Sebebi</p>
+                          <p className="font-bold text-fg">{ret.quantity} bilet (Birim: ₺{ret.price})</p>
+                          <p className="text-muted italic">"{ret.reason || 'Sebep belirtilmemiş'}"</p>
+                        </div>
+                      </div>
+
+                      {ret.status === 'pending' && (
+                        <div className="flex gap-3 pt-2 border-t border-white/5">
+                          <button
+                            onClick={() => handleRejectReturn(ret.id)}
+                            className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-all"
+                          >
+                            Talebi Reddet
+                          </button>
+                          <button
+                            onClick={() => handleApproveReturn(ret.id)}
+                            className="flex-1 py-2.5 rounded-xl text-xs font-bold btn-gradient transition-all"
+                          >
+                            Talebi Onayla & Ücreti İade Et
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

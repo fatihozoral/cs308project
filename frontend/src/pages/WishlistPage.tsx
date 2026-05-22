@@ -18,6 +18,8 @@ interface WishlistEvent {
   emoji: string;
   image_url?: string;
   accent: string;
+  original_price?: number;
+  discount_rate?: number;
 }
 
 interface CartItem {
@@ -180,13 +182,25 @@ const WishlistPage: React.FC = () => {
                   <p>📍 {event.venue}, {event.city}</p>
                 </div>
                 <div className="flex flex-col gap-2 pt-3 border-t border-border">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-fg">₺{event.price}</span>
-                    <button
-                      onClick={() => addToCart(event)}
-                      className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
-                      {addedIds.has(event.id) ? 'Eklendi' : 'Sepete Ekle'}
-                    </button>
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="flex flex-col">
+                      <span className="font-black text-fg">₺{event.price}</span>
+                      {event.discount_rate && event.discount_rate > 0 && event.original_price && (
+                        <span className="text-[10px] text-muted line-through">₺{event.original_price}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {event.discount_rate && event.discount_rate > 0 && (
+                        <span className="text-[9px] font-bold text-rose-400 bg-rose-400/10 border border-rose-400/30 px-1 py-0.5 rounded-full shrink-0">
+                          %{event.discount_rate}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => addToCart(event)}
+                        className={`px-3 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'} shrink-0`}>
+                        {addedIds.has(event.id) ? 'Eklendi' : 'Sepete Ekle'}
+                      </button>
+                    </div>
                   </div>
                   <button
                     onClick={() => removeFromWishlist(event.id)}
