@@ -56,6 +56,8 @@ const AdminSalesPage: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [discountLoading, setDiscountLoading] = useState(false);
   const [localDiscounts, setLocalDiscounts] = useState<Record<number, number>>({});
+  const [localPrices, setLocalPrices] = useState<Record<number, string>>({});
+  const [priceLoading, setPriceLoading] = useState(false);
   const [returns, setReturns] = useState<any[]>([]);
   const [returnsLoading, setReturnsLoading] = useState(false);
   const [editingPrice, setEditingPrice] = useState<{ id: number; value: string } | null>(null);
@@ -186,6 +188,24 @@ const AdminSalesPage: React.FC = () => {
       setReturns([]);
     } finally {
       setReturnsLoading(false);
+    }
+  };
+
+  const handleUpdatePrice = async (eventId: number) => {
+    const raw = localPrices[eventId];
+    if (raw === undefined || raw === '') return;
+    const price = Number(raw);
+    if (isNaN(price) || price < 0) { alert('Geçerli bir fiyat girin.'); return; }
+    setPriceLoading(true);
+    try {
+      await axios.patch(`${API_URL}/admin/events/${eventId}/price`, { price }, { headers: getAuthHeader() });
+      setLocalPrices(prev => { const n = { ...prev }; delete n[eventId]; return n; });
+      alert('Temel fiyat güncellendi.');
+      fetchEvents();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Fiyat güncellenemedi.');
+    } finally {
+      setPriceLoading(false);
     }
   };
 
@@ -735,29 +755,25 @@ const AdminSalesPage: React.FC = () => {
                     </div>
 
                     <div className="bg-surface-2/40 border border-border/40 rounded-2xl p-3 space-y-2">
-                      <div className="flex justify-between items-center h-8">
-                        <span className="text-xs text-muted">Orijinal Fiyat:</span>
-                        {editingPrice?.id === ev.id ? (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              value={editingPrice?.value || ''}
-                              onChange={e => setEditingPrice({ id: ev.id, value: e.target.value })}
-                              onKeyDown={e => { if (e.key === 'Enter') handlePriceSave(ev.id); if (e.key === 'Escape') setEditingPrice(null); }}
-                              className="w-16 px-1.5 py-0.5 rounded-lg glass text-fg text-xs focus:outline-none"
-                              autoFocus
-                            />
-                            <button onClick={() => handlePriceSave(ev.id)} className="text-teal-DEFAULT text-xs font-bold">✓</button>
-                            <button onClick={() => setEditingPrice(null)} className="text-red-400 text-xs font-bold">✗</button>
-                          </div>
-                        ) : (
-                          <button onClick={() => setEditingPrice({ id: ev.id, value: String(origPrice) })}
-                            className="text-sm font-semibold text-fg hover:text-teal-DEFAULT transition-colors flex items-center gap-1"
-                            title="Fiyatı Güncelle"
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted shrink-0">Temel Fiyat:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted">₺</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={localPrices[ev.id] ?? String(origPrice)}
+                            onChange={(e) => setLocalPrices(prev => ({ ...prev, [ev.id]: e.target.value }))}
+                            className="w-20 px-2 py-1 rounded-lg glass text-fg text-sm text-right focus:outline-none"
+                          />
+                          <button
+                            onClick={() => handleUpdatePrice(ev.id)}
+                            disabled={priceLoading || localPrices[ev.id] === undefined || Number(localPrices[ev.id]) === origPrice}
+                            className="text-[11px] font-bold px-2.5 py-1 rounded-lg btn-gradient disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            ₺{origPrice} <span className="text-[10px] text-muted">✎</span>
+                            Kaydet
                           </button>
-                        )}
+                        </div>
                       </div>
                       <div className="flex justify-between items-baseline">
                         <span className="text-xs text-muted">İndirim Oranı:</span>

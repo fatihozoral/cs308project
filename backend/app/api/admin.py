@@ -83,11 +83,25 @@ class DiscountPayload(BaseModel):
     discount_rate: int
 
 
+class PricePayload(BaseModel):
+    price: float
+
+
 async def require_sales_manager(user=Depends(get_current_user)):
     role = user.user_metadata.get("role", "customer")
     if role != "sales_manager":
         raise HTTPException(status_code=403, detail="Sales manager yetkisi gerekiyor")
     return user
+
+
+@router.patch("/events/{event_id}/price")
+async def update_event_price(event_id: int, payload: PricePayload, user=Depends(require_sales_manager)):
+    if payload.price < 0:
+        raise HTTPException(status_code=400, detail="Fiyat negatif olamaz")
+    res = supabase.table("events").update({"price": payload.price}).eq("id", event_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Etkinlik bulunamadı")
+    return res.data[0]
 
 
 @router.patch("/events/{event_id}/discount")

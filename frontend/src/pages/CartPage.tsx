@@ -11,7 +11,7 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000
 
 interface CartItem { id: number; cartItemId?: string | number; name: string; price: number; date: string; venue: string; quantity: number; category?: string; }
 
-interface OrderResult { id: string; date: string; total: number; }
+interface OrderResult { id: string; date: string; total: number; invoiceEmailSent?: boolean; }
 
 interface CardLogoProps {
   type: string | null;
@@ -144,7 +144,7 @@ const CartPage: React.FC = () => {
       }));
       const res = await axios.post(`${API_URL}/orders`, { items, total: subtotal }, { headers: getAuthHeader() });
       setPurchasedItems([...cart]);
-      setOrderResult({ id: res.data.id, date: res.data.date, total: subtotal });
+      setOrderResult({ id: res.data.id, date: res.data.date, total: subtotal, invoiceEmailSent: res.data.invoice_email_sent });
       localStorage.removeItem('cart');
       setCart([]);
       setSuccess(true);
@@ -266,12 +266,21 @@ const CartPage: React.FC = () => {
               <span className="font-black text-teal-DEFAULT text-2xl">₺{orderResult?.total}</span>
             </div>
 
-            <div className="mt-4 flex items-center gap-2 text-xs text-muted bg-teal-DEFAULT/5 border border-teal-DEFAULT/20 rounded-2xl px-4 py-3">
-              <svg className="w-4 h-4 text-teal-DEFAULT flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-              </svg>
-              Fatura PDF'i <strong className="text-fg">{user?.email}</strong> adresine gönderildi.
-            </div>
+            {orderResult?.invoiceEmailSent ? (
+              <div className="mt-4 flex items-center gap-2 text-xs text-muted bg-teal-DEFAULT/5 border border-teal-DEFAULT/20 rounded-2xl px-4 py-3">
+                <svg className="w-4 h-4 text-teal-DEFAULT flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                </svg>
+                Fatura PDF'i <strong className="text-fg mx-1">{user?.email}</strong> adresine gönderildi.
+              </div>
+            ) : (
+              <div className="mt-4 flex items-center gap-2 text-xs text-muted bg-amber-500/5 border border-amber-500/20 rounded-2xl px-4 py-3">
+                <svg className="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Faturanızı aşağıdaki butondan PDF olarak indirebilirsiniz.
+              </div>
+            )}
           </div>
 
           {/* Actions */}
