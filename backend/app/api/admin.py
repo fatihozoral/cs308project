@@ -59,7 +59,7 @@ async def update_admin_event(event_id: int, body: dict, user=Depends(require_man
         "name", "description", "featured_names", "category", "emoji", "image_url", "price",
         "total_capacity", "remaining_capacity", "venue", "city", "event_date",
         "event_time", "place_id", "ticket_categories", "is_active",
-        "model", "serial_number", "warranty_status", "distributor_info", "discount_rate"
+        "model", "serial_number", "warranty_status", "distributor_info", "discount_rate", "cost"
     }
     payload = {key: value for key, value in body.items() if key in allowed_fields}
     if not payload:

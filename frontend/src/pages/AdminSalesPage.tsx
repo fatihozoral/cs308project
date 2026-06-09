@@ -20,6 +20,7 @@ const CHART_PAD = { top: 28, right: 28, bottom: 46, left: 70 };
 
 interface OrderItem {
   id: number;
+  event_id?: number;
   name: string;
   quantity: number;
   price: number;
@@ -72,53 +73,59 @@ const AdminSalesPage: React.FC = () => {
     try {
       const qrData = JSON.stringify({ orderId: order.id, date: order.date, total: order.total });
       const qrDataUrl = await QRCode.toDataURL(qrData, { width: 200, margin: 1 });
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const W = pdf.internal.pageSize.getWidth();
-      pdf.setFillColor(22, 27, 34);
-      pdf.rect(0, 0, W, 210, 'F');
       pdf.setFillColor(14, 116, 144);
-      pdf.rect(0, 0, W, 18, 'F');
+      pdf.rect(0, 0, W, 22, 'F');
       pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(11);
+      pdf.setFontSize(16);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('TicketHub - Satis Faturasi', W / 2, 11, { align: 'center' });
-      pdf.setTextColor(240, 246, 252);
-      pdf.setFontSize(13);
-      pdf.text('Siparis Faturasi', W / 2, 30, { align: 'center' });
-      pdf.setDrawColor(45, 212, 191);
-      pdf.setLineWidth(0.3);
-      pdf.line(15, 35, W - 15, 35);
-      pdf.setFontSize(8);
+      pdf.text('TicketHub - Fatura', 14, 14);
+
+      pdf.setTextColor(20, 20, 20);
+      pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
-      let y = 44;
-      order.items.forEach(item => {
-        pdf.setTextColor(100, 116, 139);
-        pdf.text(tr(item.name), 15, y);
-        pdf.setTextColor(240, 246, 252);
-        pdf.text(`${item.quantity} x TL${item.price} = TL${item.quantity * item.price}`, W - 15, y, { align: 'right' });
-        y += 8;
+      let y = 34;
+      pdf.text(`Fatura No: ${order.id}`, 14, y); y += 6;
+      pdf.text(`Tarih: ${order.date}`, 14, y); y += 6;
+      if (order.user_name) { pdf.text(`Musteri: ${trText(order.user_name)}`, 14, y); y += 6; }
+      if (order.user_email) { pdf.text(`E-posta: ${order.user_email}`, 14, y); y += 6; }
+      if (order.tax_id) { pdf.text(`Vergi/TC No: ${order.tax_id}`, 14, y); y += 6; }
+      if (order.home_address) { pdf.text(`Adres: ${trText(order.home_address)}`, 14, y, { maxWidth: W - 28 }); y += 10; }
+      y += 2;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Urun', 14, y);
+      pdf.text('Adet', 120, y);
+      pdf.text('Birim', 140, y);
+      pdf.text('Tutar', W - 14, y, { align: 'right' });
+      pdf.setDrawColor(200);
+      pdf.line(14, y + 2, W - 14, y + 2);
+      y += 8;
+      pdf.setFont('helvetica', 'normal');
+      order.items.forEach(it => {
+        pdf.text(trText(it.name).slice(0, 50), 14, y);
+        pdf.text(String(it.quantity), 120, y);
+        pdf.text(`TL${it.price}`, 140, y);
+        pdf.text(`TL${it.price * it.quantity}`, W - 14, y, { align: 'right' });
+        y += 7;
       });
-      pdf.setDrawColor(45, 212, 191);
-      pdf.line(15, y, W - 15, y);
-      y += 7;
+      pdf.setDrawColor(200);
+      pdf.line(14, y, W - 14, y);
+      y += 9;
       pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(45, 212, 191);
-      pdf.text('TOPLAM:', 15, y);
-      pdf.text(`TL${order.total}`, W - 15, y, { align: 'right' });
-      y += 12;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.setTextColor(100, 116, 139);
-      pdf.text(`Siparis No: ${order.id}`, 15, y);
-      pdf.text(`Tarih: ${order.date}`, W - 15, y, { align: 'right' });
-      y += 7;
-      if (order.user_email) { pdf.text(`Musteri: ${order.user_email}`, 15, y); y += 7; }
-      pdf.addImage(qrDataUrl, 'PNG', W / 2 - 22, y + 5, 44, 44);
-      pdf.setFillColor(14, 116, 144);
-      pdf.rect(0, 195, W, 15, 'F');
-      pdf.setTextColor(255, 255, 255);
-      pdf.setFontSize(7);
-      pdf.text('tickethub.com', W / 2, 204, { align: 'center' });
+      pdf.setFontSize(12);
+      pdf.text('TOPLAM:', 140, y);
+      pdf.text(`TL${order.total}`, W - 14, y, { align: 'right' });
+
+      // Add QR Code at the bottom
+      y += 15;
+      if (y + 40 > 297) {
+        pdf.addPage();
+        y = 20;
+      }
+      pdf.addImage(qrDataUrl, 'PNG', W / 2 - 20, y, 40, 40);
+
       pdf.save(`fatura-${order.id}.pdf`);
     } catch (err) {
       console.error(err);
@@ -218,6 +225,17 @@ const AdminSalesPage: React.FC = () => {
     }
   };
 
+  const trText = (s: string) => (s || '')
+    .replace(/ş/g, 's').replace(/Ş/g, 'S')
+    .replace(/ı/g, 'i').replace(/İ/g, 'I')
+    .replace(/ğ/g, 'g').replace(/Ğ/g, 'G')
+    .replace(/ü/g, 'u').replace(/Ü/g, 'U')
+    .replace(/ö/g, 'o').replace(/Ö/g, 'O')
+    .replace(/ç/g, 'c').replace(/Ç/g, 'C')
+    .replace(/₺/g, 'TL');
+
+
+
   const parseDate = (dateStr: string): Date => {
     if (dateStr.includes('.')) {
       const [d, m, y] = dateStr.split('.');
@@ -241,17 +259,40 @@ const AdminSalesPage: React.FC = () => {
   };
 
   const revenueOrders = filtered.filter(o => normalizeStatus(o.status) !== 'cancelled');
-  const completedOrders = filtered.filter(o => normalizeStatus(o.status) === 'delivered');
   const cancelledOrders = filtered.filter(o => normalizeStatus(o.status) === 'cancelled');
   const completedRevenue = revenueOrders.reduce((s, o) => s + Number(o.total), 0);
 
-  const estimatedExpenses = completedRevenue * 0.4;
-  const estimatedNetProfit = completedRevenue * 0.6;
+  // Etkinlik birim maliyet haritası (canlı /events verisinden)
+  const costById: Record<number, number> = {};
+  events.forEach((e: any) => { costById[e.id] = Number(e.cost ?? 0); });
+  const orderCogs = (o: Order) =>
+    o.items.reduce((s, it) => s + (costById[it.event_id ?? -1] ?? 0) * Number(it.quantity), 0);
+
+  // Onaylanan iadeler (tarih filtresine göre) → gelirden düşülür
+  const refundDate = (r: any) => (r.date || '').split(' ')[0];
+  const approvedRefunds = returns.filter((r: any) => {
+    if (r.status !== 'approved') return false;
+    const d = parseDate(refundDate(r));
+    if (startDate && d < new Date(startDate)) return false;
+    if (endDate && d > new Date(endDate)) return false;
+    return true;
+  });
+  const totalRefunds = approvedRefunds.reduce((s: number, r: any) => s + Number(r.refund_amount || 0), 0);
+
+  const totalCogs = revenueOrders.reduce((s, o) => s + orderCogs(o), 0);
+  const netRevenue = completedRevenue - totalRefunds;
+  const netProfit = netRevenue - totalCogs; // negatifse zarar
 
   const revenueByDate: Record<string, number> = {};
+  const cogsByDate: Record<string, number> = {};
+  const refundByDate: Record<string, number> = {};
   revenueOrders.forEach(o => {
-    const key = o.date;
-    revenueByDate[key] = (revenueByDate[key] || 0) + Number(o.total);
+    revenueByDate[o.date] = (revenueByDate[o.date] || 0) + Number(o.total);
+    cogsByDate[o.date] = (cogsByDate[o.date] || 0) + orderCogs(o);
+  });
+  approvedRefunds.forEach((r: any) => {
+    const key = refundDate(r);
+    refundByDate[key] = (refundByDate[key] || 0) + Number(r.refund_amount || 0);
   });
   const chartData = Object.entries(revenueByDate)
     .sort(([a], [b]) => parseDate(a).getTime() - parseDate(b).getTime())
@@ -259,7 +300,7 @@ const AdminSalesPage: React.FC = () => {
     .map(([date, revenue]) => ({
       date,
       revenue,
-      profit: revenue * 0.6,
+      profit: revenue - (cogsByDate[date] || 0) - (refundByDate[date] || 0),
       label: date.includes('.') ? date.slice(0, 5) : date.slice(5),
     }));
 
@@ -381,11 +422,11 @@ const AdminSalesPage: React.FC = () => {
             {/* KPI cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {[
-                { label: 'Toplam Gelir (Ciro)', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', accent: 'text-teal-DEFAULT' },
-                { label: 'Tahmini Gider (%40)', value: `₺${estimatedExpenses.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📉', accent: 'text-red-400' },
-                { label: 'Tahmini Net Kar (%60)', value: `₺${estimatedNetProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📈', accent: 'text-teal-accent' },
+                { label: 'Brüt Ciro', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', accent: 'text-teal-DEFAULT' },
+                { label: 'Toplam Maliyet', value: `₺${totalCogs.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📦', accent: 'text-amber-400' },
+                { label: 'İadeler', value: `₺${totalRefunds.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '↩️', accent: 'text-red-400' },
+                { label: netProfit >= 0 ? 'Net Kar' : 'Net Zarar', value: `₺${netProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: netProfit >= 0 ? '📈' : '📉', accent: netProfit >= 0 ? 'text-teal-accent' : 'text-red-400' },
                 { label: 'Toplam Sipariş', value: filtered.length, icon: '🎟️', accent: 'text-fg' },
-                { label: 'Tamamlanan', value: completedOrders.length, icon: '✅', accent: 'text-teal-DEFAULT' },
                 { label: 'İptal Edilen', value: cancelledOrders.length, icon: '❌', accent: 'text-red-400' },
               ].map(({ label, value, icon, accent }) => (
                 <div key={label} className="glass-strong rounded-2xl p-5 hover:scale-[1.02] transition-transform duration-200">
@@ -411,7 +452,7 @@ const AdminSalesPage: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-fg">
                         <span className="w-3 h-1 bg-violet-400 rounded-full" />
-                        <span>Net Kar (%60)</span>
+                        <span>Net Kar/Zarar</span>
                       </div>
                     </div>
                   </div>
@@ -628,7 +669,18 @@ const AdminSalesPage: React.FC = () => {
 
                             {/* Order Items */}
                             <div className="space-y-3 pt-2">
-                              <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold px-1">Satın Alınan Biletler</p>
+                              <div className="flex items-center justify-between px-1">
+                                <p className="text-[10px] uppercase tracking-widest text-muted-2 font-semibold">Satın Alınan Biletler</p>
+                                <button
+                                  onClick={() => downloadInvoicePDF(order)}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-DEFAULT border border-teal-DEFAULT/30 hover:border-teal-DEFAULT/60 hover:bg-teal-DEFAULT/10 px-3 py-1.5 rounded-pill transition-colors"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  Faturayı PDF indir / yazdır
+                                </button>
+                              </div>
                               {order.items.map(item => (
                                 <div key={item.id} className="flex items-center justify-between text-sm hover:bg-white/5 p-1 rounded-lg transition-colors">
                                   <div>
