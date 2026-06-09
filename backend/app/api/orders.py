@@ -176,26 +176,34 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     for item in order.items:
         # Update event capacities
         event_res = supabase.table("events").select("remaining_capacity, ticket_categories").eq("id", item.event_id).execute()
+        item_category = getattr(item, "category", None)
         if event_res.data:
             event_data = event_res.data[0]
             update_payload = {}
-            
-            rem_cap = event_data.get("remaining_capacity") if isinstance(event_data, dict) else None
-            if rem_cap is not None and isinstance(rem_cap, (int, float)):
-                new_rem = max(0, rem_cap - item.quantity)
-                update_payload["remaining_capacity"] = new_rem
-                
+
             categories = event_data.get("ticket_categories") if isinstance(event_data, dict) else None
-            item_category = getattr(item, "category", None)
-            if categories and item_category and isinstance(categories, list):
-                for cat in categories:
-                    if isinstance(cat, dict) and cat.get("name") == item_category:
-                        cat_rem = cat.get("remaining")
-                        if isinstance(cat_rem, (int, float)):
-                            cat["remaining"] = max(0, cat_rem - item.quantity)
-                        break
+            has_categories = isinstance(categories, list) and len(categories) > 0
+
+            if has_categories:
+                # Kategorili etkinlik: stok kaynağı kategorilerdir.
+                if item_category:
+                    for cat in categories:
+                        if isinstance(cat, dict) and cat.get("name") == item_category:
+                            cat_rem = cat.get("remaining")
+                            if isinstance(cat_rem, (int, float)):
+                                cat["remaining"] = max(0, cat_rem - item.quantity)
+                            break
                 update_payload["ticket_categories"] = categories
-                
+                # remaining_capacity her zaman kategori toplamından türetilir
+                update_payload["remaining_capacity"] = sum(
+                    c.get("remaining", 0) for c in categories if isinstance(c, dict)
+                )
+            else:
+                # Kategorisiz etkinlik: doğrudan remaining_capacity düşülür.
+                rem_cap = event_data.get("remaining_capacity") if isinstance(event_data, dict) else None
+                if isinstance(rem_cap, (int, float)):
+                    update_payload["remaining_capacity"] = max(0, rem_cap - item.quantity)
+
             if update_payload:
                 supabase.table("events").update(update_payload).eq("id", item.event_id).execute()
 
@@ -292,15 +300,18 @@ async def get_orders(user=Depends(get_current_user)):
     items_data = items_res.data
     
     # Fetch all returns for user to match against items
-    returns_res = supabase.table("returns").select("*").eq("user_id", str(user_id)).execute()
     returns_by_item = {}
-    for r in (returns_res.data or []):
-        returns_by_item[r["order_item_id"]] = {
-            "status": r["status"],
-            "quantity": r["quantity"],
-            "price": r["price"],
-            "reason": r.get("reason")
-        }
+    try:
+        returns_res = supabase.table("returns").select("*").eq("user_id", str(user_id)).execute()
+        for r in (returns_res.data or []):
+            returns_by_item[r["order_item_id"]] = {
+                "status": r["status"],
+                "quantity": r["quantity"],
+                "price": r["price"],
+                "reason": r.get("reason")
+            }
+    except Exception as e:
+        print(f"Warning: Failed to fetch returns from DB (perhaps table 'returns' does not exist yet): {e}")
 
     # Group items by order
     items_by_order = {}
@@ -360,12 +371,24 @@ async def cancel_order(order_id: str, user=Depends(get_current_user)):
     return {"success": True}
 
 @router.get("/orders/all")
-async def get_all_orders(user=Depends(get_current_user)):
+async def get_all_orders(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    user=Depends(get_current_user)
+):
     role = get_user_role(user)
     if role not in ("sales_manager", "product_manager"):
         raise HTTPException(status_code=403, detail="Yetkisiz erişim")
     
-    orders_res = supabase.table("orders").select("*").order("created_at", desc=True).execute()
+    query = supabase.table("orders").select("*").order("created_at", desc=True)
+    if start_date:
+        iso_start = start_date + "T00:00:00Z" if "T" not in start_date else start_date
+        query = query.gte("created_at", iso_start)
+    if end_date:
+        iso_end = end_date + "T23:59:59Z" if "T" not in end_date else end_date
+        query = query.lte("created_at", iso_end)
+
+    orders_res = query.execute()
     orders_data = orders_res.data
     
     if not orders_data:
@@ -377,15 +400,18 @@ async def get_all_orders(user=Depends(get_current_user)):
     items_data = items_res.data
     
     # Fetch returns for these order items to show admin
-    returns_res = supabase.table("returns").select("*").in_("order_id", order_ids).execute()
     returns_by_item = {}
-    for r in (returns_res.data or []):
-        returns_by_item[r["order_item_id"]] = {
-            "status": r["status"],
-            "quantity": r["quantity"],
-            "price": r["price"],
-            "reason": r.get("reason")
-        }
+    try:
+        returns_res = supabase.table("returns").select("*").in_("order_id", order_ids).execute()
+        for r in (returns_res.data or []):
+            returns_by_item[r["order_item_id"]] = {
+                "status": r["status"],
+                "quantity": r["quantity"],
+                "price": r["price"],
+                "reason": r.get("reason")
+            }
+    except Exception as e:
+        print(f"Warning: Failed to fetch returns from DB for admin: {e}")
 
     items_by_order = {}
     for item in items_data:
@@ -645,21 +671,28 @@ async def approve_return_request(return_id: str, user=Depends(get_current_user))
         if event_res.data:
             ev_data = event_res.data[0]
             update_payload = {}
-            
-            rem_cap = ev_data.get("remaining_capacity")
-            if rem_cap is not None:
-                update_payload["remaining_capacity"] = rem_cap + qty
-                
+
             categories = ev_data.get("ticket_categories")
-            if categories and category and isinstance(categories, list):
-                for cat in categories:
-                    if isinstance(cat, dict) and cat.get("name") == category:
-                        cat_rem = cat.get("remaining")
-                        if cat_rem is not None:
-                            cat["remaining"] = cat_rem + qty
-                        break
+            has_categories = isinstance(categories, list) and len(categories) > 0
+
+            if has_categories:
+                # Kategorili etkinlik: iade edilen bilet kategoriye geri eklenir, toplam türetilir.
+                if category:
+                    for cat in categories:
+                        if isinstance(cat, dict) and cat.get("name") == category:
+                            cat_rem = cat.get("remaining")
+                            if cat_rem is not None:
+                                cat["remaining"] = cat_rem + qty
+                            break
                 update_payload["ticket_categories"] = categories
-                
+                update_payload["remaining_capacity"] = sum(
+                    c.get("remaining", 0) for c in categories if isinstance(c, dict)
+                )
+            else:
+                rem_cap = ev_data.get("remaining_capacity")
+                if rem_cap is not None:
+                    update_payload["remaining_capacity"] = rem_cap + qty
+
             if update_payload:
                 supabase.table("events").update(update_payload).eq("id", event_id).execute()
 

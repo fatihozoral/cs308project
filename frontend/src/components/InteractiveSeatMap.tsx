@@ -101,7 +101,18 @@ const InteractiveSeatMap: React.FC<InteractiveSeatMapProps> = ({
             backgroundColor: `${baseColor}10`,
             boxShadow: (!isMuted && !isSoldOut) ? `0 0 40px ${baseColor}15` : 'none'
          }}>
-         
+
+         {/* Seat-row texture (tribün koltuk dokusu) */}
+         <div className="absolute inset-0 pointer-events-none mix-blend-screen"
+              style={{
+                 borderRadius: 'inherit',
+                 opacity: isSoldOut ? 0.05 : 0.22,
+                 backgroundImage: `repeating-linear-gradient(0deg, ${baseColor} 0px, ${baseColor} 1.5px, transparent 1.5px, transparent 8px), repeating-linear-gradient(90deg, ${baseColor}55 0px, ${baseColor}55 1px, transparent 1px, transparent 14px)`,
+              }} />
+         {/* Inner sheen */}
+         <div className="absolute inset-0 pointer-events-none"
+              style={{ borderRadius: 'inherit', background: `radial-gradient(120% 80% at 50% 0%, ${baseColor}22, transparent 60%)` }} />
+
          <div className="text-center pointer-events-none p-4 w-full h-full flex flex-col items-center justify-center relative z-10">
              <div className="font-black text-2xl mb-1 tracking-tight" style={{ color: baseColor }}>{catName}</div>
              {catInfo && (
@@ -181,15 +192,31 @@ const InteractiveSeatMap: React.FC<InteractiveSeatMapProps> = ({
                      {/* BLK-LEFT */}
                      {renderArea('BLK-LEFT', '180px', '300px', 'rounded-l-[80px] rounded-r-xl')}
 
-                     {/* FIELD (PITCH) */}
-                     <div className="w-[400px] h-[250px] bg-emerald-900/20 border-2 border-emerald-500/20 rounded-2xl relative flex items-center justify-center overflow-hidden flex-shrink-0 shadow-[inset_0_0_50px_rgba(16,185,129,0.1)]">
-                        <div className="absolute inset-0 opacity-20 flex text-xs justify-between p-4 flex-col text-emerald-100 font-mono tracking-widest text-center">
-                            <div>OYUN ALANI</div>
-                            <div className="w-full h-[2px] bg-white/30"></div>
-                            <div className="w-32 h-32 rounded-full border-2 border-white/30 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
-                            <div className="w-16 h-32 border-2 border-white/30 absolute top-1/2 left-0 -translate-y-1/2 rounded-r-full"></div>
-                            <div className="w-16 h-32 border-2 border-white/30 absolute top-1/2 right-0 -translate-y-1/2 rounded-l-full"></div>
-                        </div>
+                     {/* FIELD (PITCH) — futbol sahası */}
+                     <div className="w-[420px] h-[270px] rounded-2xl relative overflow-hidden flex-shrink-0 border-2 border-white/40 shadow-[inset_0_0_70px_rgba(0,0,0,0.45),0_20px_60px_rgba(0,0,0,0.5)]"
+                          style={{ background: 'linear-gradient(160deg, #1a8a45 0%, #15803d 50%, #126a33 100%)' }}>
+                        {/* Çim biçim deseni */}
+                        <div className="absolute inset-0" style={{ backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.055) 0 42px, rgba(0,0,0,0.06) 42px 84px)' }} />
+                        {/* Dış çizgi */}
+                        <div className="absolute inset-5 border-2 border-white/55 rounded-[2px]" />
+                        {/* Orta saha çizgisi */}
+                        <div className="absolute top-5 bottom-5 left-1/2 -translate-x-1/2 w-[2px] bg-white/55" />
+                        {/* Orta yuvarlak + nokta */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[88px] h-[88px] rounded-full border-2 border-white/55" />
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-white/70" />
+                        {/* Sol ceza sahası + kale sahası */}
+                        <div className="absolute top-1/2 -translate-y-1/2 left-5 w-[58px] h-[150px] border-2 border-l-0 border-white/55" />
+                        <div className="absolute top-1/2 -translate-y-1/2 left-5 w-[26px] h-[78px] border-2 border-l-0 border-white/55" />
+                        <div className="absolute top-1/2 -translate-y-1/2 left-[3px] w-[10px] h-[44px] border-2 border-l-0 border-white/70 bg-white/10" />
+                        {/* Sağ ceza sahası + kale sahası */}
+                        <div className="absolute top-1/2 -translate-y-1/2 right-5 w-[58px] h-[150px] border-2 border-r-0 border-white/55" />
+                        <div className="absolute top-1/2 -translate-y-1/2 right-5 w-[26px] h-[78px] border-2 border-r-0 border-white/55" />
+                        <div className="absolute top-1/2 -translate-y-1/2 right-[3px] w-[10px] h-[44px] border-2 border-r-0 border-white/70 bg-white/10" />
+                        {/* Köşe yayları */}
+                        <div className="absolute top-5 left-5 w-3 h-3 border-b-2 border-r-2 border-white/45 rounded-br-full" />
+                        <div className="absolute top-5 right-5 w-3 h-3 border-b-2 border-l-2 border-white/45 rounded-bl-full" />
+                        <div className="absolute bottom-5 left-5 w-3 h-3 border-t-2 border-r-2 border-white/45 rounded-tr-full" />
+                        <div className="absolute bottom-5 right-5 w-3 h-3 border-t-2 border-l-2 border-white/45 rounded-tl-full" />
                      </div>
 
                      {/* BLK-RIGHT */}

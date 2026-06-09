@@ -143,11 +143,6 @@ const getBotResponse = (input: string): string => {
 const ChatBot: React.FC = () => {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-
-  // Admin / yönetici panellerinde bilet asistanı butonunu gizle
-  if (location.pathname.startsWith('/admin')) {
-    return null;
-  }
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -166,6 +161,11 @@ const ChatBot: React.FC = () => {
       inputRef.current?.focus();
     }
   }, [messages, isOpen]);
+
+  // Admin / yönetici panellerinde bilet asistanı butonunu gizle
+  if (location.pathname.startsWith('/admin')) {
+    return null;
+  }
 
   const isOrderQuery = (msg: string) => {
     const m = msg.toLowerCase();

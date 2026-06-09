@@ -29,28 +29,43 @@ class TestDiscounts:
         mock_user = make_user(role="sales_manager")
         mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
 
+        events_table = MagicMock()
+        wishlist_table = MagicMock()
+        notifications_table = MagicMock()
+
+        def table_side_effect(table_name):
+            if table_name == "events":
+                return events_table
+            elif table_name == "wishlist":
+                return wishlist_table
+            elif table_name == "notifications":
+                return notifications_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_side_effect
+
         # Mock event fetch for original price
         event_mock = MagicMock()
-        event_mock.data = {"price": 100.0, "name": "Rock Fest"}
-        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value = event_mock
+        event_mock.data = [{"price": 100.0, "name": "Rock Fest"}]
+        events_table.select.return_value.eq.return_value.execute.return_value = event_mock
 
         # Mock update
         update_mock = MagicMock()
         update_mock.data = [{"id": 1, "discount_rate": 20}]
-        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+        events_table.update.return_value.eq.return_value.execute.return_value = update_mock
 
         # Mock wishlist fetch
         wishlist_mock = MagicMock()
         wishlist_mock.data = [{"user_id": "user-456"}]
-        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = wishlist_mock
+        wishlist_table.select.return_value.eq.return_value.execute.return_value = wishlist_mock
 
         # Mock notifications insert
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[])
+        notifications_table.insert.return_value.execute.return_value = MagicMock(data=[])
 
         payload = {"discount_rate": 20}
         response = client.patch("/api/admin/events/1/discount", json=payload, headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 200
-        assert response.json()["success"] is True
+        assert response.json()["discount_rate"] == 20
 
     @patch("app.api.admin.supabase")
     def test_update_discount_unauthorized(self, mock_supabase):
@@ -81,25 +96,40 @@ class TestReturns:
         mock_user = make_user(role="customer", user_id="user-123")
         mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
 
+        orders_table = MagicMock()
+        items_table = MagicMock()
+        returns_table = MagicMock()
+
+        def table_side_effect(table_name):
+            if table_name == "orders":
+                return orders_table
+            elif table_name == "order_items":
+                return items_table
+            elif table_name == "returns":
+                return returns_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_side_effect
+
         # Mock order lookup (created_at matches 30-day window)
         order_mock = MagicMock()
         order_mock.data = {"id": 1, "user_id": "user-123", "created_at": "2026-05-20T12:00:00Z", "total": 200.0}
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value = order_mock
+        orders_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
 
         # Mock order item lookup
         item_mock = MagicMock()
         item_mock.data = {"id": 10, "order_id": 1, "price": 100.0, "quantity": 2}
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value = item_mock
+        items_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = item_mock
 
         # Mock existing returns lookup (none)
         existing_mock = MagicMock()
         existing_mock.data = []
-        mock_supabase.table.return_value.select.return_value.eq.return_value.neq.return_value.execute.return_value = existing_mock
+        returns_table.select.return_value.eq.return_value.neq.return_value.execute.return_value = existing_mock
 
         # Mock insert return request
         insert_mock = MagicMock()
         insert_mock.data = [{"id": 5, "status": "pending", "quantity": 1}]
-        mock_supabase.table.return_value.insert.return_value.execute.return_value = insert_mock
+        returns_table.insert.return_value.execute.return_value = insert_mock
 
         payload = {"order_item_id": 10, "quantity": 1, "reason": "Tarih uymuyor"}
         response = client.post("/api/orders/1/return", json=payload, headers={"Authorization": "Bearer fake-token"})
@@ -112,10 +142,11 @@ class TestReturns:
         mock_user = make_user(role="customer", user_id="user-123")
         mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
 
-        # Mock order older than 30 days
+        orders_table = MagicMock()
         order_mock = MagicMock()
         order_mock.data = {"id": 1, "user_id": "user-123", "created_at": "2026-04-01T12:00:00Z", "total": 200.0}
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value = order_mock
+        orders_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+        mock_supabase.table.return_value = orders_table
 
         payload = {"order_item_id": 10, "quantity": 1, "reason": "Tarih uymuyor"}
         response = client.post("/api/orders/1/return", json=payload, headers={"Authorization": "Bearer fake-token"})
@@ -128,20 +159,35 @@ class TestReturns:
         mock_user = make_user(role="customer", user_id="user-123")
         mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
 
+        orders_table = MagicMock()
+        items_table = MagicMock()
+        returns_table = MagicMock()
+
+        def table_side_effect(table_name):
+            if table_name == "orders":
+                return orders_table
+            elif table_name == "order_items":
+                return items_table
+            elif table_name == "returns":
+                return returns_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_side_effect
+
         # Mock order lookup
         order_mock = MagicMock()
         order_mock.data = {"id": 1, "user_id": "user-123", "created_at": "2026-05-20T12:00:00Z", "total": 200.0}
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value = order_mock
+        orders_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
 
         # Mock order item lookup (only purchased 2)
         item_mock = MagicMock()
         item_mock.data = {"id": 10, "order_id": 1, "price": 100.0, "quantity": 2}
-        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value = item_mock
+        items_table.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = item_mock
 
         # Mock existing returns lookup
         existing_mock = MagicMock()
         existing_mock.data = []
-        mock_supabase.table.return_value.select.return_value.eq.return_value.neq.return_value.execute.return_value = existing_mock
+        returns_table.select.return_value.eq.return_value.neq.return_value.execute.return_value = existing_mock
 
         payload = {"order_item_id": 10, "quantity": 3, "reason": "İptal"}
         response = client.post("/api/orders/1/return", json=payload, headers={"Authorization": "Bearer fake-token"})

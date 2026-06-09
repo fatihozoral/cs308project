@@ -55,13 +55,32 @@ class TestGetAllOrders:
         mock_user = make_user(role="sales_manager")
         mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
 
+        orders_table = MagicMock()
+        items_table = MagicMock()
+        returns_table = MagicMock()
+
+        def table_side_effect(table_name):
+            if table_name == "orders":
+                return orders_table
+            elif table_name == "order_items":
+                return items_table
+            elif table_name == "returns":
+                return returns_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_side_effect
+
         orders_mock = MagicMock()
         orders_mock.data = [make_order(1), make_order(2, user_id="user-456")]
-        mock_supabase.table.return_value.select.return_value.order.return_value.execute.return_value = orders_mock
+        orders_table.select.return_value.order.return_value.execute.return_value = orders_mock
 
         items_mock = MagicMock()
         items_mock.data = [make_order_item(1)]
-        mock_supabase.table.return_value.select.return_value.in_.return_value.execute.return_value = items_mock
+        items_table.select.return_value.in_.return_value.execute.return_value = items_mock
+
+        returns_mock = MagicMock()
+        returns_mock.data = []
+        returns_table.select.return_value.in_.return_value.execute.return_value = returns_mock
 
         response = client.get("/api/orders/all", headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 200
@@ -163,6 +182,53 @@ class TestGetAllOrders:
         assert response.status_code == 200
         order_id = response.json()[0]["id"]
         assert order_id.startswith("TH-171210")
+
+    @patch("app.api.orders.supabase")
+    def test_get_all_orders_with_date_filtering(self, mock_supabase):
+        """Should filter orders by date in the database query when start_date/end_date are provided"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        orders_table = MagicMock()
+        items_table = MagicMock()
+        returns_table = MagicMock()
+
+        def table_side_effect(table_name):
+            if table_name == "orders":
+                return orders_table
+            elif table_name == "order_items":
+                return items_table
+            elif table_name == "returns":
+                return returns_table
+            return MagicMock()
+
+        mock_supabase.table.side_effect = table_side_effect
+
+        orders_mock = MagicMock()
+        orders_mock.data = [make_order(1)]
+        
+        # Mock the chained gte and lte calls
+        gte_mock = MagicMock()
+        lte_mock = MagicMock()
+        orders_table.select.return_value.order.return_value.gte = gte_mock
+        gte_mock.return_value.lte = lte_mock
+        lte_mock.return_value.execute.return_value = orders_mock
+
+        items_mock = MagicMock()
+        items_mock.data = []
+        items_table.select.return_value.in_.return_value.execute.return_value = items_mock
+
+        returns_mock = MagicMock()
+        returns_mock.data = []
+        returns_table.select.return_value.in_.return_value.execute.return_value = returns_mock
+
+        response = client.get(
+            "/api/orders/all?start_date=2026-05-01&end_date=2026-05-31",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        gte_mock.assert_called_once_with("created_at", "2026-05-01T00:00:00Z")
+        lte_mock.assert_called_once_with("created_at", "2026-05-31T23:59:59Z")
 
 # ─── GET /orders ─────────────────────────────────────────────
 

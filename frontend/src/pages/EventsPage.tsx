@@ -34,6 +34,7 @@ interface Event {
   distributor_info?: string;
   original_price?: number;
   discount_rate?: number;
+  ticket_categories?: Array<{ name: string; price: number; capacity: number; remaining: number }> | null;
 }
 
 interface CartItem { id: number; name: string; price: number; date: string; venue: string; quantity: number; }
@@ -146,6 +147,11 @@ const EventsPage: React.FC = () => {
   });
 
   const addToCart = (e: Event) => {
+    // Kategorili etkinliklerde kategori seçimi zorunlu → koltuk planına yönlendir
+    if (e.ticket_categories && e.ticket_categories.length > 0) {
+      navigate(`/events/${e.id}`);
+      return;
+    }
     if ((e.remaining_capacity ?? 1) <= 0) return;
     setCart(prev => { const ex = prev.find(i => i.id === e.id); return ex ? prev.map(i => i.id === e.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { id: e.id, name: e.name, price: e.price, date: e.date, venue: e.venue, quantity: 1 }]; });
     setAddedIds(prev => new Set(prev).add(e.id));
@@ -274,6 +280,7 @@ const EventsPage: React.FC = () => {
             {filtered.map((event, i) => {
               const soldOut = (event.remaining_capacity ?? 1) <= 0;
               const lastOne = !soldOut && event.remaining_capacity === 1;
+              const hasCats = Boolean(event.ticket_categories && event.ticket_categories.length > 0);
               return (
               <div key={event.id}
                 onClick={() => wishlistSelectMode ? toggleWishlistSelection(event.id) : setSelectedEvent(event)}
@@ -329,7 +336,7 @@ const EventsPage: React.FC = () => {
                   <div className="flex items-center justify-between pt-3 border-t border-border gap-2 flex-wrap">
                     <div className="flex flex-col">
                       <span className="font-black text-fg">₺{event.price}</span>
-                      {event.discount_rate && event.discount_rate > 0 && event.original_price && (
+                      {(event.discount_rate ?? 0) > 0 && event.original_price && (
                         <span className="text-[10px] text-muted line-through">₺{event.original_price}</span>
                       )}
                     </div>
@@ -347,7 +354,7 @@ const EventsPage: React.FC = () => {
                         onClick={e => { e.stopPropagation(); addToCart(event); }}
                         disabled={soldOut}
                         className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${soldOut ? 'glass border border-red-400/30 text-red-300' : addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
-                        {soldOut ? 'Tükendi' : addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
+                        {soldOut ? 'Tükendi' : hasCats ? 'Bilet Seç' : addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
                       </button>
                     )}
                   </div>
