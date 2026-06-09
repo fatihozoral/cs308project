@@ -13,6 +13,36 @@ interface CartItem { id: number; cartItemId?: string | number; name: string; pri
 
 interface OrderResult { id: string; date: string; total: number; }
 
+interface CardLogoProps {
+  type: string | null;
+  className?: string;
+}
+
+const CardLogo: React.FC<CardLogoProps> = ({ type, className = "" }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [type]);
+
+  if (!type) {
+    return <span className={`font-black italic text-white/90 drop-shadow-md ${className}`}>TICKET</span>;
+  }
+
+  if (hasError) {
+    return <span className={`font-black italic text-white/90 drop-shadow-md ${className}`}>{type}</span>;
+  }
+
+  return (
+    <img 
+      src={`/cards/${type.toLowerCase()}.png`} 
+      alt={`${type} Logo`} 
+      className={`object-contain ${className}`}
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
 const CartPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -45,26 +75,6 @@ const CartPage: React.FC = () => {
     if (/^3[47]/.test(num)) return 'Amex';
     if (/^9792/.test(num)) return 'Troy';
     return null;
-  };
-
-  const CardLogo = ({ type, className = "" }: { type: string | null, className?: string }) => {
-    if (!type) {
-      return <span className={`font-black italic text-white/90 drop-shadow-md ${className}`}>TICKET</span>;
-    }
-    
-    // Orijinal .png dosyalarının public/cards/ dizini altında olduğunu varsayıyoruz
-    return (
-      <img 
-        src={`/cards/${type.toLowerCase()}.png`} 
-        alt={`${type} Logo`} 
-        className={`object-contain ${className}`}
-        onError={(e) => {
-          // Eğer resim yüklenemezse fallback olarak isim yazsın
-          (e.target as HTMLImageElement).style.display = 'none';
-          (e.target as HTMLImageElement).parentElement?.insertAdjacentHTML('beforeend', `<span class="font-black italic text-white/90 drop-shadow-md ${className}">${type}</span>`);
-        }}
-      />
-    );
   };
 
   const luhnCheck = (val: string) => {

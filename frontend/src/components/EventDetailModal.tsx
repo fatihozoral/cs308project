@@ -39,6 +39,7 @@ interface Event {
   distributor_info?: string;
   original_price?: number;
   discount_rate?: number;
+  ticket_categories?: Array<{ name: string; price: number; capacity: number; remaining: number }> | null;
 }
 
 interface Props {
@@ -106,6 +107,8 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
     ? (comments.reduce((s, c) => s + c.rating, 0) / comments.length).toFixed(1)
     : null;
   const soldOut = (event.remaining_capacity ?? 1) <= 0;
+  const hasSeatMap = (event.category === 'Spor' || event.category === 'Konser')
+    && Array.isArray(event.ticket_categories) && event.ticket_categories.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,7 +210,7 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
               <p className="text-xs text-muted font-medium mb-0.5">Bilet Fiyatı</p>
               <div className="flex items-baseline gap-2.5 flex-wrap">
                 <p className="text-3xl font-black text-fg">₺{event.price}</p>
-                {event.discount_rate && event.discount_rate > 0 && event.original_price && (
+                {(event.discount_rate ?? 0) > 0 && event.original_price && (
                   <>
                     <p className="text-sm text-muted line-through">₺{event.original_price}</p>
                     <span className="text-[10px] font-bold text-rose-400 bg-rose-400/10 border border-rose-400/30 px-2 py-0.5 rounded-full">
@@ -216,12 +219,31 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
                   </>
                 )}
               </div>
-              {event.remaining_capacity !== undefined && (
-                <div className={`inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-pill border text-xs font-bold ${soldOut ? 'bg-red-500/10 border-red-400/40 text-red-300' : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/30 text-teal-DEFAULT'}`}>
-                  <span className={`w-2 h-2 rounded-full ${soldOut ? 'bg-red-400' : 'bg-teal-DEFAULT'}`} />
-                  {soldOut ? 'Biletler tükendi' : `${event.remaining_capacity} bilet kaldı`}
-                </div>
-              )}
+              {event.remaining_capacity !== undefined && (() => {
+                const remaining = event.remaining_capacity;
+                const lowStock = !soldOut && remaining <= 10;
+                const cls = soldOut
+                  ? 'bg-red-500/10 border-red-400/30 text-red-300'
+                  : lowStock
+                    ? 'bg-amber-500/10 border-amber-400/30 text-amber-300'
+                    : 'bg-teal-DEFAULT/10 border-teal-DEFAULT/25 text-teal-DEFAULT';
+                const dot = soldOut ? 'bg-red-400' : lowStock ? 'bg-amber-400' : 'bg-teal-DEFAULT';
+                return (
+                  <div className={`inline-flex items-center gap-2 mt-2.5 pl-2 pr-3 py-1 rounded-pill border ${cls}`}>
+                    <span className="relative flex h-2 w-2">
+                      {!soldOut && <span className={`absolute inline-flex h-full w-full rounded-full ${dot} opacity-60 animate-ping`} />}
+                      <span className={`relative inline-flex h-2 w-2 rounded-full ${dot}`} />
+                    </span>
+                    <span className="text-xs font-semibold tracking-tight">
+                      {soldOut
+                        ? 'Biletler tükendi'
+                        : lowStock
+                          ? `Son ${remaining} bilet!`
+                          : <>Son <span className="font-black">{remaining.toLocaleString('tr-TR')}</span> bilet</>}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <button
@@ -231,15 +253,37 @@ const EventDetailModal: React.FC<Props> = ({ event, onClose, onAddToCart, isInCa
               >
                 {wishlistLoading ? 'Güncelleniyor...' : wishlisted ? 'Listeden Çıkar' : 'İstek Listesine Ekle'}
               </button>
-              <button
-                onClick={() => { if (!soldOut) { onAddToCart(event); onClose(); } }}
-                disabled={soldOut}
-                className={`px-6 py-3 rounded-pill text-sm font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${soldOut ? 'glass border border-red-400/30 text-red-300' : isInCart ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}
-              >
-                {soldOut ? 'Tükendi' : isInCart ? 'Sepette' : 'Sepete Ekle'}
-              </button>
+              {!hasSeatMap && (
+                <button
+                  onClick={() => { if (!soldOut) { onAddToCart(event); onClose(); } }}
+                  disabled={soldOut}
+                  className={`px-6 py-3 rounded-pill text-sm font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${soldOut ? 'glass border border-red-400/30 text-red-300' : isInCart ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}
+                >
+                  {soldOut ? 'Tükendi' : isInCart ? 'Sepette' : 'Sepete Ekle'}
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Seat map link (Spor / Konser with ticket categories) */}
+          {hasSeatMap && (
+            <button
+              type="button"
+              onClick={() => { onClose(); navigate(`/events/${event.id}`); }}
+              className="w-full flex items-center justify-between gap-4 px-5 py-4 rounded-2xl bg-teal-DEFAULT/10 border border-teal-DEFAULT/30 hover:bg-teal-DEFAULT/15 transition-all group"
+            >
+              <span className="flex items-center gap-3 text-left">
+                <span className="text-2xl">🪑</span>
+                <span>
+                  <span className="block text-sm font-bold text-fg">Koltuk Planını Seç</span>
+                  <span className="block text-xs text-muted">Kategori ve oturma alanını interaktif planda seç</span>
+                </span>
+              </span>
+              <svg className="w-5 h-5 text-teal-DEFAULT transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
 
           {/* Collapsible Tech Specs */}
           {(event.model || event.serial_number || event.warranty_status || event.distributor_info) && (
