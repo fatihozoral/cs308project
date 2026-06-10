@@ -53,6 +53,29 @@ class TestVerifyTicket:
         assert data["event"] == "Test Konser"
 
     @patch("app.api.orders.supabase")
+    def test_verify_already_used_ticket(self, mock_supabase):
+        """Already-used ticket should return is_used=True and the used_at timestamp"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        ticket_mock = MagicMock()
+        ticket_mock.data = {
+            "id": 1,
+            "token": "used-token-abc",
+            "is_used": True,
+            "used_at": "2026-04-01T10:00:00Z",
+            "events": {"name": "Test Konser", "event_date": "2026-05-01", "venue": "Zorlu PSM"}
+        }
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = ticket_mock
+
+        response = client.get("/api/tickets/used-token-abc/verify", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["valid"] is True
+        assert data["is_used"] is True
+        assert data["used_at"] == "2026-04-01T10:00:00Z"
+
+    @patch("app.api.orders.supabase")
     def test_verify_nonexistent_ticket_returns_404(self, mock_supabase):
         """Token not found in database should return 404"""
         mock_user = make_user()
