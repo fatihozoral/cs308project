@@ -315,3 +315,89 @@ class TestCreateOrder:
         payload = {"items": [], "total": 0}
         response = client.post("/api/orders", json=payload, headers={"Authorization": "Bearer invalid"})
         assert response.status_code == 401
+
+# ─── PATCH /orders/{order_id}/cancel ─────────────────────────
+
+class TestCancelOrder:
+
+    @patch("app.api.orders.supabase")
+    def test_cancel_processing_order_success(self, mock_supabase):
+        """Müşteri 'processing' durumundaki siparişini iptal edebilmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = make_order(1, user_id="user-123", status="processing")
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        update_mock = MagicMock()
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/cancel",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    @patch("app.api.orders.supabase")
+    def test_cancel_already_cancelled_order_returns_400(self, mock_supabase):
+        """Zaten iptal edilmiş siparişi tekrar iptal etmeye çalışınca 400 dönmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = make_order(1, user_id="user-123", status="cancelled")
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/cancel",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "iptal edilmiş" in response.json()["detail"]
+
+    @patch("app.api.orders.supabase")
+    def test_cancel_another_users_order_returns_404(self, mock_supabase):
+        """Başka kullanıcıya ait siparişi iptal etmeye çalışınca 404 dönmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = None
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/cancel",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 404
+        assert "bulunamadı" in response.json()["detail"]
+
+    @patch("app.api.orders.supabase")
+    def test_cancel_with_invalid_order_id_format_returns_400(self, mock_supabase):
+        """Geçersiz ID formatıyla istek gelince 400 dönmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/orders/INVALID-ID/cancel",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "Geçersiz" in response.json()["detail"]
+
+    def test_cancel_without_auth_returns_422(self):
+        """Auth header olmadan istek 422 dönmeli"""
+        response = client.patch("/api/orders/TH-1712100001/cancel")
+        assert response.status_code == 422
+
+    @patch("app.api.orders.supabase")
+    def test_cancel_with_invalid_token_returns_401(self, mock_supabase):
+        """Geçersiz token ile istek 401 dönmeli"""
+        mock_supabase.auth.get_user.return_value = MagicMock(user=None)
+        response = client.patch(
+            "/api/orders/TH-1712100001/cancel",
+            headers={"Authorization": "Bearer invalid-token"}
+        )
+        assert response.status_code == 401
