@@ -401,3 +401,114 @@ class TestCancelOrder:
             headers={"Authorization": "Bearer invalid-token"}
         )
         assert response.status_code == 401
+
+# ─── POST /orders/{order_id}/return ──────────────────────────
+
+class TestRequestReturn:
+
+    def _make_return_payload(self, order_item_id=1, quantity=1, reason="Beğenmedim"):
+        return {"order_item_id": order_item_id, "quantity": quantity, "reason": reason}
+
+    def _setup_order_mock(self, mock_supabase, created_at="2026-06-01T10:00:00Z", user_id="user-123"):
+        order_mock = MagicMock()
+        order_mock.data = {"id": 1, "user_id": user_id, "status": "delivered", "created_at": created_at}
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+    @patch("app.api.orders.supabase")
+    def test_return_request_success(self, mock_supabase):
+        """30 gün içinde teslim edilmiş siparişe iade talebi oluşturulabilmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        from datetime import datetime, timezone, timedelta
+        recent = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat().replace("+00:00", "Z")
+
+        order_mock = MagicMock()
+        order_mock.data = {"id": 1, "user_id": "user-123", "status": "delivered", "created_at": recent}
+
+        item_mock = MagicMock()
+        item_mock.data = {"id": 1, "order_id": 1, "quantity": 2, "price": 150.0}
+
+        existing_returns_mock = MagicMock()
+        existing_returns_mock.data = []
+
+        insert_mock = MagicMock()
+        insert_mock.data = [{"id": "ret-1", "status": "pending", "quantity": 1}]
+
+        def table_side_effect(table_name):
+            t = MagicMock()
+            if table_name == "orders":
+                t.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+            elif table_name == "order_items":
+                t.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = item_mock
+            elif table_name == "returns":
+                t.select.return_value.eq.return_value.neq.return_value.execute.return_value = existing_returns_mock
+                t.insert.return_value.execute.return_value = insert_mock
+            return t
+
+        mock_supabase.table.side_effect = table_side_effect
+
+        response = client.post(
+            "/api/orders/TH-1712100001/return",
+            json=self._make_return_payload(),
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "pending"
+
+    @patch("app.api.orders.supabase")
+    def test_return_rejected_after_30_days(self, mock_supabase):
+        """30 günden eski siparişe iade talebi 400 dönmeli (Feature 15)"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        from datetime import datetime, timezone, timedelta
+        old_date = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat().replace("+00:00", "Z")
+
+        order_mock = MagicMock()
+        order_mock.data = {"id": 1, "user_id": "user-123", "status": "delivered", "created_at": old_date}
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        response = client.post(
+            "/api/orders/TH-1712100001/return",
+            json=self._make_return_payload(),
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "30 gün" in response.json()["detail"]
+
+    @patch("app.api.orders.supabase")
+    def test_return_order_not_found_returns_404(self, mock_supabase):
+        """Başka kullanıcıya ait ya da olmayan sipariş için 404 dönmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = None
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        response = client.post(
+            "/api/orders/TH-1712100001/return",
+            json=self._make_return_payload(),
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 404
+
+    @patch("app.api.orders.supabase")
+    def test_return_with_zero_quantity_returns_400(self, mock_supabase):
+        """Miktar 0 gönderilince 400 dönmeli"""
+        mock_user = make_user(role="customer", user_id="user-123")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.post(
+            "/api/orders/TH-1712100001/return",
+            json=self._make_return_payload(quantity=0),
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "sıfırdan büyük" in response.json()["detail"]
+
+    def test_return_without_auth_returns_422(self):
+        """Auth header olmadan istek 422 dönmeli"""
+        response = client.post("/api/orders/TH-1712100001/return", json=self._make_return_payload())
+        assert response.status_code == 422
