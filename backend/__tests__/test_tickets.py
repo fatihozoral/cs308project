@@ -147,3 +147,28 @@ class TestRedeemTicket:
         assert response.status_code == 200
         assert response.json()["success"] is True
 
+    @patch("app.api.orders.supabase")
+    def test_redeem_ticket_marks_used_with_timestamp(self, mock_supabase):
+        """Redeem işlemi update'e is_used=True ve dolu bir used_at göndermeli"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        select_mock = MagicMock()
+        select_mock.data = {
+            "id": 1,
+            "token": "valid-token-456",
+            "is_used": False,
+            "used_at": None
+        }
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = select_mock
+
+        update_mock = MagicMock()
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.post("/api/tickets/valid-token-456/redeem", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+
+        update_call_args = mock_supabase.table.return_value.update.call_args[0][0]
+        assert update_call_args["is_used"] is True
+        assert update_call_args["used_at"]
+
