@@ -97,6 +97,11 @@ class TestVerifyTicket:
 
 class TestRedeemTicket:
 
+    def test_redeem_ticket_invalid_bearer_format_returns_401(self):
+        """Authorization header 'Bearer ' ile başlamıyorsa 401 dönmeli"""
+        response = client.post("/api/tickets/some-token/redeem", headers={"Authorization": "fake-token"})
+        assert response.status_code == 401
+
     @patch("app.api.orders.supabase")
     def test_redeem_already_used_ticket_returns_409(self, mock_supabase):
         """Attempting to redeem an already-used ticket should return 409"""
