@@ -92,3 +92,70 @@ class TestGetEvents:
         assert len(data) == 2
         cities = [e["city"] for e in data]
         assert all(c == "Istanbul" for c in cities)
+
+    @patch("app.api.events.supabase")
+    def test_get_events_without_auth(self, mock_supabase):
+        """Üye girişi yapılmadan (Authorization headersız) etkinlikler görüntülenebilmeli (Gereksinim 4)"""
+        events_mock = MagicMock()
+        events_mock.data = [make_event(1)]
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = events_mock
+
+        response = client.get("/api/events")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("app.api.events.supabase")
+    def test_get_events_by_category(self, mock_supabase):
+        """Kategori filtresi gönderildiğinde doğru sorgu çalışmalı"""
+        events_mock = MagicMock()
+        events_mock.data = [make_event(1, category="Konser")]
+        mock_supabase.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = events_mock
+
+        response = client.get("/api/events?category=Konser")
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+        assert response.json()[0]["category"] == "Konser"
+
+
+# ─── GET /events/{event_id} ───────────────────────────────────
+
+class TestGetSingleEvent:
+
+    @patch("app.api.events.supabase")
+    def test_get_single_event_success(self, mock_supabase):
+        """Mevcut bir etkinliğin detayları ID ile çekilebilmeli"""
+        event_mock = MagicMock()
+        event_mock.data = make_event(1, name="Tarkan Konseri")
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = event_mock
+
+        response = client.get("/api/events/1")
+        assert response.status_code == 200
+        assert response.json()["name"] == "Tarkan Konseri"
+
+    @patch("app.api.events.supabase")
+    def test_get_single_event_not_found(self, mock_supabase):
+        """Olmayan bir etkinlik ID'si girildiğinde 404 dönmeli"""
+        event_mock = MagicMock()
+        event_mock.data = None
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = event_mock
+
+        response = client.get("/api/events/999")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Etkinlik bulunamadı"
+
+    @patch("app.api.events.supabase")
+    def test_event_details_discount_price(self, mock_supabase):
+        """İndirimli ürün detayında hesaplanan aktif fiyat doğru olmalı (Gereksinim 11)"""
+        event_data = make_event(1, price=500.0)
+        event_data["discount_rate"] = 20  # %20 indirim
+        
+        event_mock = MagicMock()
+        event_mock.data = event_data
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = event_mock
+
+        response = client.get("/api/events/1")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["price"] == 400.0  # 500 * (1 - 0.20)
+        assert data["original_price"] == 500.0
+
