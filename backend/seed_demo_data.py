@@ -39,7 +39,7 @@ def check_tables():
 def create_or_login_customer():
     email = "customer@ticketing.com"
     password = "Customer1234!"
-    name = "Ahmet Yilmaz"
+    name = "Test User"
     tax_id = "12345678901"
     home_address = "Kadikoy, Istanbul"
     
@@ -48,6 +48,16 @@ def create_or_login_customer():
         # Try logging in first
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         print(f"✅ Logged in successfully. User ID: {res.user.id}")
+        # Force update user metadata to ensure name is updated to Test User
+        supabase.auth.update_user({
+            "data": {
+                "name": name,
+                "tax_id": tax_id,
+                "home_address": home_address,
+                "role": "customer"
+            }
+        })
+        print(f"✅ Updated user profile metadata (Name: {name})")
         return res.user.id
     except Exception:
         # Try signing up
@@ -250,7 +260,7 @@ def seed_orders(user_id, event_ids):
             print(f"  - Warning: could not clean orders table: {e}")
         print("  - Cleared existing order history where possible.")
         
-    customer_name = "Ahmet Yilmaz"
+    customer_name = "Test User"
     customer_email = "customer@ticketing.com"
     customer_address = "Kadikoy, Istanbul"
     customer_tax_id = "12345678901"
