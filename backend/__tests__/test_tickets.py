@@ -84,3 +84,28 @@ class TestRedeemTicket:
 
         response = client.post("/api/tickets/used-token-xyz/redeem", headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 409
+
+    @patch("app.api.orders.supabase")
+    def test_redeem_valid_ticket_success(self, mock_supabase):
+        """Kullanılmamış geçerli bir bilet başarıyla okutulabilmeli (redeem edilmeli)"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        # 1. Select mock: ticket is unused
+        select_mock = MagicMock()
+        select_mock.data = {
+            "id": 1,
+            "token": "valid-token-123",
+            "is_used": False,
+            "used_at": None
+        }
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = select_mock
+
+        # 2. Update mock: successful execute
+        update_mock = MagicMock()
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.post("/api/tickets/valid-token-123/redeem", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+

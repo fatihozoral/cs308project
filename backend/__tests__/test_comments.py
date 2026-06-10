@@ -99,3 +99,70 @@ class TestGetEventComments:
         response = client.get("/api/comments/event/99", headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 200
         assert response.json() == []
+
+
+# ─── GET /comments/pending ────────────────────────────────────
+
+class TestGetPendingComments:
+
+    @patch("app.api.comments.supabase")
+    def test_get_pending_comments_success(self, mock_supabase):
+        """Product Manager bekleyen yorumları çekebilmeli"""
+        mock_user = make_user()
+        mock_user.user_metadata = {"role": "product_manager", "name": "PM User"}
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        comments_mock = MagicMock()
+        comments_mock.data = [make_comment(status="pending")]
+        mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.execute.return_value = comments_mock
+
+        response = client.get("/api/comments/pending", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+    @patch("app.api.comments.supabase")
+    def test_get_pending_comments_unauthorized(self, mock_supabase):
+        """Müşteri rolü bekleyen yorumları çekmeye çalışırsa 403 almalı"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.get("/api/comments/pending", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 403
+
+
+# ─── PATCH /comments/{comment_id} ─────────────────────────────
+
+class TestUpdateCommentStatus:
+
+    @patch("app.api.comments.supabase")
+    def test_approve_comment_success(self, mock_supabase):
+        """Product Manager yorumu onaylayabilmeli"""
+        mock_user = make_user()
+        mock_user.user_metadata = {"role": "product_manager", "name": "PM User"}
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        update_mock = MagicMock()
+        update_mock.data = [make_comment(status="approved")]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        payload = {"status": "approved"}
+        response = client.patch("/api/comments/1", json=payload, headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["status"] == "approved"
+
+    @patch("app.api.comments.supabase")
+    def test_reject_comment_success(self, mock_supabase):
+        """Product Manager yorumu reddedebilmeli"""
+        mock_user = make_user()
+        mock_user.user_metadata = {"role": "product_manager", "name": "PM User"}
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        update_mock = MagicMock()
+        update_mock.data = [make_comment(status="rejected")]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        payload = {"status": "rejected"}
+        response = client.patch("/api/comments/1", json=payload, headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["status"] == "rejected"
+
