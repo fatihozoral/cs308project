@@ -58,10 +58,10 @@ const ACCENTS = [
 ];
 
 const DEFAULT_CATEGORIES = ['Konser', 'Spor', 'Tiyatro', 'Festival'];
-type SortKey = 'date' | 'price-asc' | 'price-desc' | 'popularity';
+type SortKey = 'name' | 'price-asc' | 'price-desc' | 'popularity';
 
 const SORT_OPTIONS: Array<[SortKey, string]> = [
-  ['date', 'Tarihe Göre'],
+  ['name', 'Ada Göre (A-Z)'],
   ['price-asc', 'Fiyat: Düşük → Yüksek'],
   ['price-desc', 'Fiyat: Yüksek → Düşük'],
   ['popularity', 'Popülerliğe Göre'],
@@ -76,7 +76,7 @@ const EventsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tümü');
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [sort, setSort] = useState<SortKey>('date');
+  const [sort, setSort] = useState<SortKey>('name');
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
   const [events, setEvents] = useState<Event[]>([]);
@@ -150,7 +150,7 @@ const EventsPage: React.FC = () => {
       if (aSoldOut !== bSoldOut) return aSoldOut ? 1 : -1;
       return getPopularityScore(b) - getPopularityScore(a);
     }
-    return a.date.localeCompare(b.date);
+    return a.name.localeCompare(b.name);
   });
 
   const addToCart = (e: Event) => {
