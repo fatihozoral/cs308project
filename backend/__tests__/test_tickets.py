@@ -3,8 +3,10 @@ Unit Tests - Tickets API
 CS 308 Online Ticketing Project
 """
 
+# pyrefly: ignore [missing-import]
 import pytest
 from unittest.mock import MagicMock, patch
+# pyrefly: ignore [missing-import]
 from fastapi.testclient import TestClient
 import sys
 import os
