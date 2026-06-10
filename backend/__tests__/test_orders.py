@@ -613,3 +613,130 @@ class TestUpdateOrderStatus:
         """Auth header olmadan istek 422 dönmeli"""
         response = client.patch("/api/orders/TH-1712100001/status", json={"status": "in-transit"})
         assert response.status_code == 422
+
+# ─── PATCH /admin/returns/{return_id}/approve ─────────────────
+
+class TestApproveReturn:
+
+    def _mock_approve(self, mock_supabase, return_status="pending", stock=10):
+        return_mock = MagicMock()
+        return_mock.data = {
+            "id": "ret-1", "status": return_status,
+            "order_item_id": 1, "user_id": "user-123",
+            "quantity": 2, "price": 150.0
+        }
+
+        item_mock = MagicMock()
+        item_mock.data = {"event_id": 5, "category": None}
+
+        event_mock = MagicMock()
+        event_mock.data = [{"remaining_capacity": stock, "ticket_categories": []}]
+
+        update_return_mock = MagicMock()
+        update_return_mock.data = [{"id": "ret-1", "status": "approved"}]
+
+        notif_mock = MagicMock()
+        notif_mock.data = [{}]
+
+        def table_side_effect(table_name):
+            t = MagicMock()
+            if table_name == "returns":
+                t.select.return_value.eq.return_value.single.return_value.execute.return_value = return_mock
+                t.update.return_value.eq.return_value.execute.return_value = update_return_mock
+                t.insert.return_value.execute.return_value = notif_mock
+            elif table_name == "order_items":
+                t.select.return_value.eq.return_value.single.return_value.execute.return_value = item_mock
+            elif table_name == "events":
+                t.select.return_value.eq.return_value.execute.return_value = event_mock
+                t.update.return_value.eq.return_value.execute.return_value = MagicMock()
+            elif table_name == "notifications":
+                t.insert.return_value.execute.return_value = notif_mock
+            return t
+
+        mock_supabase.table.side_effect = table_side_effect
+
+    @patch("app.api.orders.supabase")
+    def test_sales_manager_can_approve_return(self, mock_supabase):
+        """Sales manager bekleyen iade talebini onaylayabilmeli"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+        self._mock_approve(mock_supabase)
+
+        response = client.patch(
+            "/api/admin/returns/ret-1/approve",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    @patch("app.api.orders.supabase")
+    def test_approve_already_resolved_return_returns_400(self, mock_supabase):
+        """Zaten sonuçlandırılmış iade talebini onaylamaya çalışınca 400 dönmeli"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+        self._mock_approve(mock_supabase, return_status="approved")
+
+        response = client.patch(
+            "/api/admin/returns/ret-1/approve",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "sonuçlandırılmış" in response.json()["detail"]
+
+    @patch("app.api.orders.supabase")
+    def test_approve_nonexistent_return_returns_404(self, mock_supabase):
+        """Olmayan iade talebi onaylanmak istenince 404 dönmeli"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        return_mock = MagicMock()
+        return_mock.data = None
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = return_mock
+
+        response = client.patch(
+            "/api/admin/returns/nonexistent/approve",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 404
+
+    @patch("app.api.orders.supabase")
+    def test_customer_cannot_approve_return(self, mock_supabase):
+        """Müşteri iade talebini onaylayamaz, 403 dönmeli"""
+        mock_user = make_user(role="customer")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/returns/ret-1/approve",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 403
+
+    @patch("app.api.orders.supabase")
+    def test_product_manager_cannot_approve_return(self, mock_supabase):
+        """Product manager iade talebini onaylayamaz, 403 dönmeli"""
+        mock_user = make_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/returns/ret-1/approve",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 403
+
+    @patch("app.api.orders.supabase")
+    def test_approve_restores_stock(self, mock_supabase):
+        """İade onaylanınca ürün stoğu iade miktarı kadar artmalı"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+        self._mock_approve(mock_supabase, stock=5)
+
+        client.patch(
+            "/api/admin/returns/ret-1/approve",
+            headers={"Authorization": "Bearer fake-token"}
+        )
+
+        update_calls = [
+            call for call in mock_supabase.table.call_args_list
+            if call.args and call.args[0] == "events"
+        ]
+        assert len(update_calls) > 0
