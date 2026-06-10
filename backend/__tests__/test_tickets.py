@@ -75,6 +75,11 @@ class TestVerifyTicket:
         assert data["is_used"] is True
         assert data["used_at"] == "2026-04-01T10:00:00Z"
 
+    def test_verify_ticket_invalid_bearer_format_returns_401(self):
+        """Authorization header 'Bearer ' ile başlamıyorsa 401 dönmeli"""
+        response = client.get("/api/tickets/some-token/verify", headers={"Authorization": "fake-token"})
+        assert response.status_code == 401
+
     @patch("app.api.orders.supabase")
     def test_verify_nonexistent_ticket_returns_404(self, mock_supabase):
         """Token not found in database should return 404"""
