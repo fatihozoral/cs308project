@@ -88,6 +88,19 @@ class TestRedeemTicket:
         assert response.status_code == 409
 
     @patch("app.api.orders.supabase")
+    def test_redeem_nonexistent_ticket_returns_404(self, mock_supabase):
+        """Token not found in database should return 404 on redeem"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        ticket_mock = MagicMock()
+        ticket_mock.data = None
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = ticket_mock
+
+        response = client.post("/api/tickets/nonexistent-token/redeem", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 404
+
+    @patch("app.api.orders.supabase")
     def test_redeem_valid_ticket_success(self, mock_supabase):
         """Kullanılmamış geçerli bir bilet başarıyla okutulabilmeli (redeem edilmeli)"""
         mock_user = make_user()
