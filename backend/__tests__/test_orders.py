@@ -512,3 +512,104 @@ class TestRequestReturn:
         """Auth header olmadan istek 422 dönmeli"""
         response = client.post("/api/orders/TH-1712100001/return", json=self._make_return_payload())
         assert response.status_code == 422
+
+# ─── PATCH /orders/{order_id}/status ─────────────────────────
+
+class TestUpdateOrderStatus:
+
+    @patch("app.api.orders.supabase")
+    def test_processing_to_in_transit_success(self, mock_supabase):
+        """Product manager 'processing' siparişi 'in-transit' yapabilmeli"""
+        mock_user = make_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = make_order(1, status="processing")
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        update_mock = MagicMock()
+        update_mock.data = [make_order(1, status="in-transit")]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/status",
+            json={"status": "in-transit"},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "in-transit"
+
+    @patch("app.api.orders.supabase")
+    def test_in_transit_to_delivered_success(self, mock_supabase):
+        """Product manager 'in-transit' siparişi 'delivered' yapabilmeli"""
+        mock_user = make_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = make_order(1, status="in-transit")
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        update_mock = MagicMock()
+        update_mock.data = [make_order(1, status="delivered")]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/status",
+            json={"status": "delivered"},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "delivered"
+
+    @patch("app.api.orders.supabase")
+    def test_invalid_transition_returns_400(self, mock_supabase):
+        """'processing' -> 'delivered' gibi geçersiz geçiş 400 dönmeli"""
+        mock_user = make_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = make_order(1, status="processing")
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/status",
+            json={"status": "delivered"},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "Geçersiz durum geçişi" in response.json()["detail"]
+
+    @patch("app.api.orders.supabase")
+    def test_customer_cannot_update_status(self, mock_supabase):
+        """Müşteri rolü teslimat durumunu değiştirememeli, 403 dönmeli"""
+        mock_user = make_user(role="customer")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/status",
+            json={"status": "in-transit"},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 403
+
+    @patch("app.api.orders.supabase")
+    def test_order_not_found_returns_404(self, mock_supabase):
+        """Olmayan sipariş ID'si için 404 dönmeli"""
+        mock_user = make_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        order_mock = MagicMock()
+        order_mock.data = None
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = order_mock
+
+        response = client.patch(
+            "/api/orders/TH-1712100001/status",
+            json={"status": "in-transit"},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 404
+
+    def test_update_status_without_auth_returns_422(self):
+        """Auth header olmadan istek 422 dönmeli"""
+        response = client.patch("/api/orders/TH-1712100001/status", json={"status": "in-transit"})
+        assert response.status_code == 422
