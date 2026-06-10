@@ -552,8 +552,18 @@ const AdminProductsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border text-sm">
-                      {deliveries.map((del, i) => (
-                        <tr key={del.id} className="hover:bg-white/5 transition-colors animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
+                      {deliveries.map((del, i) => {
+                        const hasProductB = del.items?.some((item: any) => item.name?.includes('Product B'));
+                        return (
+                          <tr 
+                            key={del.id} 
+                            className={`transition-colors animate-fade-up ${
+                              hasProductB 
+                                ? 'bg-teal-500/10 border-l-4 border-l-teal-500 hover:bg-teal-500/15 font-medium' 
+                                : 'hover:bg-white/5'
+                            }`} 
+                            style={{ animationDelay: `${i * 0.03}s` }}
+                          >
                           {/* Sipariş ID */}
                           <td className="px-5 py-4 font-mono font-bold text-fg">
                             {del.id}
@@ -644,7 +654,8 @@ const AdminProductsPage: React.FC = () => {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

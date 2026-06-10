@@ -10,6 +10,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  tax_id?: string;
+  home_address?: string;
 }
 
 export interface LoginCredentials {

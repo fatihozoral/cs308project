@@ -60,16 +60,6 @@ const AdminSalesPage: React.FC = () => {
   const [priceLoading, setPriceLoading] = useState(false);
   const [returns, setReturns] = useState<any[]>([]);
   const [returnsLoading, setReturnsLoading] = useState(false);
-  const [editingPrice, setEditingPrice] = useState<{ id: number; value: string } | null>(null);
-
-  const tr = (s: string) => s
-    .replace(/ş/g,'s').replace(/Ş/g,'S')
-    .replace(/ı/g,'i').replace(/İ/g,'I')
-    .replace(/ğ/g,'g').replace(/Ğ/g,'G')
-    .replace(/ü/g,'u').replace(/Ü/g,'U')
-    .replace(/ö/g,'o').replace(/Ö/g,'O')
-    .replace(/ç/g,'c').replace(/Ç/g,'C')
-    .replace(/₺/g,'TL');
 
   const downloadInvoicePDF = async (order: Order) => {
     try {
@@ -135,20 +125,7 @@ const AdminSalesPage: React.FC = () => {
     }
   };
 
-  const handlePriceSave = async (id: number) => {
-    if (!editingPrice) return;
-    const newPrice = Number(editingPrice.value);
-    if (newPrice < 0) return alert('Fiyat negatif olamaz.');
-    try {
-      await axios.patch(`${API_URL}/admin/events/${id}`, { price: newPrice }, { headers: getAuthHeader() });
-      setEvents(prev => prev.map(e => e.id === id ? { ...e, price: newPrice, original_price: newPrice } : e));
-      setEditingPrice(null);
-      alert('Fiyat başarıyla güncellendi!');
-      fetchEvents();
-    } catch {
-      alert('Fiyat güncellenemedi.');
-    }
-  };
+
 
   useEffect(() => {
     fetchOrders();
