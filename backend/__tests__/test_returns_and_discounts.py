@@ -193,3 +193,109 @@ class TestReturns:
         response = client.post("/api/orders/1/return", json=payload, headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 400
         assert "Maksimum iade" in response.json()["detail"]
+
+
+class TestSalesManagerReturns:
+
+    @patch("app.api.orders.supabase")
+    def test_get_admin_returns_success(self, mock_supabase):
+        """Sales Manager tüm iade taleplerini listeleyebilmeli"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        returns_mock = MagicMock()
+        returns_mock.data = [{"id": "ret-1", "order_id": 1, "order_item_id": 10, "user_id": "user-123", "quantity": 1, "price": 100.0, "status": "pending"}]
+        
+        # We need mock for returns select, orders in select, order_items in select
+        mock_supabase.table.return_value.select.return_value.order.return_value.execute.return_value = returns_mock
+        
+        orders_mock = MagicMock()
+        orders_mock.data = [{"id": 1, "user_name": "Test User", "user_email": "test@example.com"}]
+        
+        items_mock = MagicMock()
+        items_mock.data = [{"id": 10, "event_name": "Konser X", "category": "Konser"}]
+        
+        mock_supabase.table.return_value.select.return_value.in_.return_value.execute.side_effect = [
+            orders_mock,
+            items_mock
+        ]
+
+        response = client.get("/api/admin/returns", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+        assert response.json()[0]["event_name"] == "Konser X"
+
+    @patch("app.api.orders.supabase")
+    def test_get_admin_returns_unauthorized(self, mock_supabase):
+        """Customer rolü iade taleplerini çekememeli (403)"""
+        mock_user = make_user(role="customer")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.get("/api/admin/returns", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 403
+
+    @patch("app.api.orders.supabase")
+    def test_approve_return_success(self, mock_supabase):
+        """Sales Manager iade talebini onaylayabilmeli ve stok geri yüklenmeli"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        # Mock return request check
+        return_mock = MagicMock()
+        return_mock.data = {"id": "ret-1", "order_item_id": 10, "quantity": 1, "status": "pending"}
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = return_mock
+
+        # Mock order item check (to get event_id and category)
+        item_mock = MagicMock()
+        item_mock.data = {"event_id": 100, "category": "Konser"}
+        
+        # Mock event check (to get remaining capacity)
+        event_mock = MagicMock()
+        event_mock.data = [{"remaining_capacity": 50, "ticket_categories": []}]
+
+        # Mock database selects
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = [
+            return_mock,
+            item_mock
+        ]
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = event_mock
+
+        # Mock return update and event capacity update
+        update_mock = MagicMock()
+        update_mock.data = [{"id": "ret-1", "status": "approved"}]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch("/api/admin/returns/ret-1/approve", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "approved"
+
+    @patch("app.api.orders.supabase")
+    def test_approve_return_unauthorized_for_product_manager(self, mock_supabase):
+        """Product Manager iade onaylayamamalı, sadece Sales Manager onaylayabilir (Gereksinim 15)"""
+        mock_user = make_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch("/api/admin/returns/ret-1/approve", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 403
+        assert "Sadece Sales Manager" in response.json()["detail"]
+
+    @patch("app.api.orders.supabase")
+    def test_reject_return_success(self, mock_supabase):
+        """Sales Manager iade talebini reddedebilmeli"""
+        mock_user = make_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        # Mock return request check
+        return_mock = MagicMock()
+        return_mock.data = {"status": "pending"}
+        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = return_mock
+
+        # Mock return update
+        update_mock = MagicMock()
+        update_mock.data = [{"id": "ret-1", "status": "rejected"}]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch("/api/admin/returns/ret-1/reject", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["data"]["status"] == "rejected"
+
