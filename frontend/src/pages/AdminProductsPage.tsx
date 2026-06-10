@@ -41,7 +41,6 @@ interface Comment {
   created_at: string;
 }
 
-const CATEGORIES = ['Konser', 'Spor', 'Tiyatro', 'Festival'];
 
 const AdminProductsPage: React.FC = () => {
   const { user, logout } = useAuth();
@@ -56,6 +55,17 @@ const AdminProductsPage: React.FC = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editingStock, setEditingStock] = useState<{ id: number; value: string } | null>(null);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+  const [categories, setCategories] = useState<string[]>(['Konser', 'Spor', 'Tiyatro', 'Festival']);
+  const [newCategory, setNewCategory] = useState('');
+
+  const handleAddCategory = () => {
+    const trimmed = newCategory.trim();
+    if (trimmed && !categories.includes(trimmed)) {
+      setCategories(prev => [...prev, trimmed]);
+      setForm(p => ({ ...p, category: trimmed }));
+      setNewCategory('');
+    }
+  };
 
   const [form, setForm] = useState({
     name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
@@ -596,8 +606,15 @@ const AdminProductsPage: React.FC = () => {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Kategori</label>
                   <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className={inputCls}>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                </div>
+                <div className="space-y-1.5 flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="text-xs font-semibold text-muted uppercase tracking-widest">Yeni Kategori Ekle</label>
+                    <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="Örn: Sergi, Sinema..." className={inputCls} />
+                  </div>
+                  <button type="button" onClick={handleAddCategory} className="px-4 h-[44px] rounded-xl btn-gradient font-bold text-sm">+</button>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">

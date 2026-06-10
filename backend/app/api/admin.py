@@ -29,6 +29,13 @@ async def require_product_manager(user=Depends(get_current_user)):
     return user
 
 
+async def require_manager(user=Depends(get_current_user)):
+    role = user.user_metadata.get("role", "customer")
+    if role not in ("product_manager", "sales_manager"):
+        raise HTTPException(status_code=403, detail="Yönetici yetkisi gerekiyor")
+    return user
+
+
 @router.get("/events")
 async def get_admin_events(user=Depends(require_product_manager)):
     res = supabase.table("events").select("*").order("id").execute()
@@ -47,7 +54,7 @@ async def create_admin_event(event: EventCreate, user=Depends(require_product_ma
 
 
 @router.patch("/events/{event_id}")
-async def update_admin_event(event_id: int, body: dict, user=Depends(require_product_manager)):
+async def update_admin_event(event_id: int, body: dict, user=Depends(require_manager)):
     allowed_fields = {
         "name", "description", "featured_names", "category", "emoji", "image_url", "price",
         "total_capacity", "remaining_capacity", "venue", "city", "event_date",
