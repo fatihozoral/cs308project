@@ -697,6 +697,16 @@ async def approve_return_request(return_id: str, user=Depends(get_current_user))
                 supabase.table("events").update(update_payload).eq("id", event_id).execute()
 
     update_res = supabase.table("returns").update({"status": "approved", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", return_id).execute()
+    if update_res.data:
+        try:
+            refund_amount = round(r_data["quantity"] * r_data["price"], 2)
+            supabase.table("notifications").insert({
+                "user_id": r_data["user_id"],
+                "title": "İade Talebiniz Onaylandı! 💸",
+                "message": f"Siparişinizdeki bilet iade talebi onaylandı! ₺{refund_amount} tutarındaki ücret hesabınıza geri yatırılmıştır."
+            }).execute()
+        except Exception as exc:
+            print(f"Failed to create refund notification: {exc}")
     return {"success": True, "data": update_res.data[0]}
 
 
@@ -706,12 +716,22 @@ async def reject_return_request(return_id: str, user=Depends(get_current_user)):
     if role != "sales_manager":
         raise HTTPException(status_code=403, detail="Sadece Sales Manager iade taleplerini reddedebilir")
         
-    return_res = supabase.table("returns").select("status").eq("id", return_id).single().execute()
+    return_res = supabase.table("returns").select("status, user_id").eq("id", return_id).single().execute()
     if not return_res.data:
         raise HTTPException(status_code=404, detail="İade talebi bulunamadı")
-    if return_res.data["status"] != "pending":
+    r_data = return_res.data
+    if r_data["status"] != "pending":
         raise HTTPException(status_code=400, detail="Bu talep zaten sonuçlandırılmış")
         
     update_res = supabase.table("returns").update({"status": "rejected", "updated_at": datetime.now(timezone.utc).isoformat()}).eq("id", return_id).execute()
+    if update_res.data:
+        try:
+            supabase.table("notifications").insert({
+                "user_id": r_data["user_id"],
+                "title": "İade Talebi Reddedildi ❌",
+                "message": f"Siparişinizdeki bilet iade talebi uygun bulunmadı ve reddedildi."
+            }).execute()
+        except Exception as exc:
+            print(f"Failed to create refund rejection notification: {exc}")
     return {"success": True, "data": update_res.data[0]}
 

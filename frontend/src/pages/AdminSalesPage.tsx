@@ -9,6 +9,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getAuthHeader } from '@/services/authService';
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 
 const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000/api';
 
@@ -55,6 +57,89 @@ const AdminSalesPage: React.FC = () => {
   const [localDiscounts, setLocalDiscounts] = useState<Record<number, number>>({});
   const [returns, setReturns] = useState<any[]>([]);
   const [returnsLoading, setReturnsLoading] = useState(false);
+  const [editingPrice, setEditingPrice] = useState<{ id: number; value: string } | null>(null);
+
+  const tr = (s: string) => s
+    .replace(/ş/g,'s').replace(/Ş/g,'S')
+    .replace(/ı/g,'i').replace(/İ/g,'I')
+    .replace(/ğ/g,'g').replace(/Ğ/g,'G')
+    .replace(/ü/g,'u').replace(/Ü/g,'U')
+    .replace(/ö/g,'o').replace(/Ö/g,'O')
+    .replace(/ç/g,'c').replace(/Ç/g,'C')
+    .replace(/₺/g,'TL');
+
+  const downloadInvoicePDF = async (order: Order) => {
+    try {
+      const qrData = JSON.stringify({ orderId: order.id, date: order.date, total: order.total });
+      const qrDataUrl = await QRCode.toDataURL(qrData, { width: 200, margin: 1 });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' });
+      const W = pdf.internal.pageSize.getWidth();
+      pdf.setFillColor(22, 27, 34);
+      pdf.rect(0, 0, W, 210, 'F');
+      pdf.setFillColor(14, 116, 144);
+      pdf.rect(0, 0, W, 18, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('TicketHub - Satis Faturasi', W / 2, 11, { align: 'center' });
+      pdf.setTextColor(240, 246, 252);
+      pdf.setFontSize(13);
+      pdf.text('Siparis Faturasi', W / 2, 30, { align: 'center' });
+      pdf.setDrawColor(45, 212, 191);
+      pdf.setLineWidth(0.3);
+      pdf.line(15, 35, W - 15, 35);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      let y = 44;
+      order.items.forEach(item => {
+        pdf.setTextColor(100, 116, 139);
+        pdf.text(tr(item.name), 15, y);
+        pdf.setTextColor(240, 246, 252);
+        pdf.text(`${item.quantity} x TL${item.price} = TL${item.quantity * item.price}`, W - 15, y, { align: 'right' });
+        y += 8;
+      });
+      pdf.setDrawColor(45, 212, 191);
+      pdf.line(15, y, W - 15, y);
+      y += 7;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(45, 212, 191);
+      pdf.text('TOPLAM:', 15, y);
+      pdf.text(`TL${order.total}`, W - 15, y, { align: 'right' });
+      y += 12;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text(`Siparis No: ${order.id}`, 15, y);
+      pdf.text(`Tarih: ${order.date}`, W - 15, y, { align: 'right' });
+      y += 7;
+      if (order.user_email) { pdf.text(`Musteri: ${order.user_email}`, 15, y); y += 7; }
+      pdf.addImage(qrDataUrl, 'PNG', W / 2 - 22, y + 5, 44, 44);
+      pdf.setFillColor(14, 116, 144);
+      pdf.rect(0, 195, W, 15, 'F');
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(7);
+      pdf.text('tickethub.com', W / 2, 204, { align: 'center' });
+      pdf.save(`fatura-${order.id}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert('PDF oluşturulurken hata oluştu.');
+    }
+  };
+
+  const handlePriceSave = async (id: number) => {
+    if (!editingPrice) return;
+    const newPrice = Number(editingPrice.value);
+    if (newPrice < 0) return alert('Fiyat negatif olamaz.');
+    try {
+      await axios.patch(`${API_URL}/admin/events/${id}`, { price: newPrice }, { headers: getAuthHeader() });
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, price: newPrice, original_price: newPrice } : e));
+      setEditingPrice(null);
+      alert('Fiyat başarıyla güncellendi!');
+      fetchEvents();
+    } catch {
+      alert('Fiyat güncellenemedi.');
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -500,6 +585,17 @@ const AdminSalesPage: React.FC = () => {
                               <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`}/>
                               {sc.label}
                             </span>
+                            {order.status !== 'cancelled' && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); downloadInvoicePDF(order); }}
+                                className="text-[11px] font-bold text-teal-400 hover:text-teal-300 border border-teal-500/20 hover:border-teal-400/40 px-2.5 py-1 rounded-pill transition-colors flex items-center gap-1 z-10"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                PDF
+                              </button>
+                            )}
                             <p className="font-black text-fg">₺{Number(order.total).toLocaleString('tr-TR')}</p>
                             <svg
                               className={`w-4 h-4 text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
@@ -587,9 +683,29 @@ const AdminSalesPage: React.FC = () => {
                     </div>
 
                     <div className="bg-surface-2/40 border border-border/40 rounded-2xl p-3 space-y-2">
-                      <div className="flex justify-between items-baseline">
+                      <div className="flex justify-between items-center h-8">
                         <span className="text-xs text-muted">Orijinal Fiyat:</span>
-                        <span className="text-sm font-semibold text-fg/80">₺{origPrice}</span>
+                        {editingPrice?.id === ev.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              value={editingPrice?.value || ''}
+                              onChange={e => setEditingPrice({ id: ev.id, value: e.target.value })}
+                              onKeyDown={e => { if (e.key === 'Enter') handlePriceSave(ev.id); if (e.key === 'Escape') setEditingPrice(null); }}
+                              className="w-16 px-1.5 py-0.5 rounded-lg glass text-fg text-xs focus:outline-none"
+                              autoFocus
+                            />
+                            <button onClick={() => handlePriceSave(ev.id)} className="text-teal-DEFAULT text-xs font-bold">✓</button>
+                            <button onClick={() => setEditingPrice(null)} className="text-red-400 text-xs font-bold">✗</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setEditingPrice({ id: ev.id, value: String(origPrice) })}
+                            className="text-sm font-semibold text-fg hover:text-teal-DEFAULT transition-colors flex items-center gap-1"
+                            title="Fiyatı Güncelle"
+                          >
+                            ₺{origPrice} <span className="text-[10px] text-muted">✎</span>
+                          </button>
+                        )}
                       </div>
                       <div className="flex justify-between items-baseline">
                         <span className="text-xs text-muted">İndirim Oranı:</span>
