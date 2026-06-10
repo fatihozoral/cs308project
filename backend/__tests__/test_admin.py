@@ -133,3 +133,183 @@ class TestUpdateEventDiscount:
         response = client.patch("/api/admin/events/1/discount", json={"discount_rate": 20}, headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 200
         assert response.json()["discount_rate"] == 20
+
+    @patch("app.api.admin.supabase")
+    def test_discount_rate_above_90_returns_400(self, mock_supabase):
+        """İndirim oranı %90'ı geçince 400 dönmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/events/1/discount",
+            json={"discount_rate": 95},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "%90" in response.json()["detail"]
+
+    @patch("app.api.admin.supabase")
+    def test_discount_rate_negative_returns_400(self, mock_supabase):
+        """Negatif indirim oranı 400 dönmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/events/1/discount",
+            json={"discount_rate": -5},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+
+    @patch("app.api.admin.supabase")
+    def test_discount_on_nonexistent_event_returns_404(self, mock_supabase):
+        """Olmayan ürüne indirim uygulanmak istenince 404 dönmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        event_mock = MagicMock()
+        event_mock.data = []
+        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = event_mock
+
+        response = client.patch(
+            "/api/admin/events/999/discount",
+            json={"discount_rate": 20},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 404
+
+    @patch("app.api.admin.supabase")
+    def test_product_manager_cannot_set_discount(self, mock_supabase):
+        """Product Manager indirim uygulayamaz, 403 dönmeli"""
+        mock_user = make_admin_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/events/1/discount",
+            json={"discount_rate": 20},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 403
+
+    @patch("app.api.admin.supabase")
+    def test_discount_notifies_wishlist_users(self, mock_supabase):
+        """İndirim uygulanınca istek listesindeki kullanıcılara bildirim gitmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        event_mock = MagicMock()
+        event_mock.data = [{"name": "Konser", "price": 300.0}]
+
+        update_mock = MagicMock()
+        update_mock.data = [{"id": 1, "discount_rate": 30}]
+
+        wishlist_mock = MagicMock()
+        wishlist_mock.data = [{"user_id": "user-1"}, {"user_id": "user-2"}]
+
+        notif_mock = MagicMock()
+
+        def table_side_effect(table_name):
+            t = MagicMock()
+            if table_name == "events":
+                t.select.return_value.eq.return_value.execute.return_value = event_mock
+                t.update.return_value.eq.return_value.execute.return_value = update_mock
+            elif table_name == "wishlist":
+                t.select.return_value.eq.return_value.execute.return_value = wishlist_mock
+            elif table_name == "notifications":
+                t.insert.return_value.execute.return_value = notif_mock
+            return t
+
+        mock_supabase.table.side_effect = table_side_effect
+
+        response = client.patch(
+            "/api/admin/events/1/discount",
+            json={"discount_rate": 30},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+
+        notif_calls = [c for c in mock_supabase.table.call_args_list if c.args and c.args[0] == "notifications"]
+        assert len(notif_calls) > 0
+
+# ─── PATCH /api/admin/events/{event_id} (price update) ───────
+
+class TestUpdateEventPrice:
+
+    @patch("app.api.admin.supabase")
+    def test_sales_manager_can_set_price(self, mock_supabase):
+        """Sales Manager ürün fiyatını belirleyebilmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        update_mock = MagicMock()
+        update_mock.data = [{"id": 1, "name": "Ürün D", "price": 350.0}]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch(
+            "/api/admin/events/1",
+            json={"price": 350.0},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+        assert response.json()["price"] == 350.0
+
+    @patch("app.api.admin.supabase")
+    def test_product_manager_can_set_price(self, mock_supabase):
+        """Product Manager de ürün fiyatını güncelleyebilmeli"""
+        mock_user = make_admin_user(role="product_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        update_mock = MagicMock()
+        update_mock.data = [{"id": 1, "price": 200.0}]
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch(
+            "/api/admin/events/1",
+            json={"price": 200.0},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 200
+
+    @patch("app.api.admin.supabase")
+    def test_customer_cannot_update_price(self, mock_supabase):
+        """Müşteri fiyat güncelleyemez, 403 dönmeli"""
+        mock_user = make_admin_user(role="customer")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/events/1",
+            json={"price": 100.0},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 403
+
+    @patch("app.api.admin.supabase")
+    def test_update_price_nonexistent_event_returns_404(self, mock_supabase):
+        """Olmayan ürünün fiyatı güncellenmeye çalışılınca 404 dönmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        update_mock = MagicMock()
+        update_mock.data = []
+        mock_supabase.table.return_value.update.return_value.eq.return_value.execute.return_value = update_mock
+
+        response = client.patch(
+            "/api/admin/events/999",
+            json={"price": 100.0},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 404
+
+    @patch("app.api.admin.supabase")
+    def test_empty_payload_returns_400(self, mock_supabase):
+        """Boş payload gönderilince 400 dönmeli"""
+        mock_user = make_admin_user(role="sales_manager")
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        response = client.patch(
+            "/api/admin/events/1",
+            json={},
+            headers={"Authorization": "Bearer fake-token"}
+        )
+        assert response.status_code == 400
+        assert "alan yok" in response.json()["detail"]
