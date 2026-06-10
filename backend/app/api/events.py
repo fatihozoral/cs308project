@@ -87,9 +87,10 @@ async def get_events(search: Optional[str] = None, category: Optional[str] = Non
             "model": row.get("model"),
             "serial_number": row.get("serial_number"),
             "warranty_status": row.get("warranty_status"),
-            "distributor_info": row.get("distributor_info")
+            "distributor_info": row.get("distributor_info"),
+            "cost": row.get("cost")
         })
-        
+
     return result
 
 @router.get("/events/{event_id}")
@@ -138,5 +139,6 @@ async def get_event(event_id: int):
         "model": row.get("model"),
         "serial_number": row.get("serial_number"),
         "warranty_status": row.get("warranty_status"),
-        "distributor_info": row.get("distributor_info")
+        "distributor_info": row.get("distributor_info"),
+        "cost": row.get("cost")
     }

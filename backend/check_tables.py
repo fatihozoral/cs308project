@@ -8,7 +8,7 @@ url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
 supabase = create_client(url, key)
 
-tables = ["events", "orders", "order_items"]
+tables = ["events", "orders", "order_items", "tickets", "returns", "notifications", "wishlist"]
 
 for table in tables:
     try:

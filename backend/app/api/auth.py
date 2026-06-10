@@ -35,7 +35,9 @@ def register_user(user: UserRegister):
                     "id": response.user.id,
                     "email": response.user.email,
                     "name": user.name,
-                    "role": "customer"
+                    "role": "customer",
+                    "tax_id": user.tax_id,
+                    "home_address": user.home_address
                 }
             }
         else:
@@ -63,7 +65,9 @@ def login_user(user: UserLogin):
                 "id": response.user.id,
                 "email": response.user.email,
                 "name": response.user.user_metadata.get("name", ""),
-                "role": response.user.user_metadata.get("role", "customer")
+                "role": response.user.user_metadata.get("role", "customer"),
+                "tax_id": response.user.user_metadata.get("tax_id", ""),
+                "home_address": response.user.user_metadata.get("home_address", "")
             }
         }
     except Exception as e:

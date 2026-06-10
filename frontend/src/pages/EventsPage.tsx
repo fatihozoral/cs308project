@@ -57,7 +57,7 @@ const ACCENTS = [
   'from-slate-500/20 to-gray-600/20',
 ];
 
-const CATEGORIES = ['Tümü', 'Konser', 'Spor', 'Tiyatro', 'Festival'] as const;
+const DEFAULT_CATEGORIES = ['Konser', 'Spor', 'Tiyatro', 'Festival'];
 type SortKey = 'date' | 'price-asc' | 'price-desc' | 'popularity';
 
 const SORT_OPTIONS: Array<[SortKey, string]> = [
@@ -75,6 +75,7 @@ const getPopularityScore = (event: Event) => {
 const EventsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState('Tümü');
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [sort, setSort] = useState<SortKey>('date');
   const [sortOpen, setSortOpen] = useState(false);
   const sortRef = useRef<HTMLDivElement>(null);
@@ -100,6 +101,12 @@ const EventsPage: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cart));
   }, [cart]);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/categories`)
+      .then(res => { if (Array.isArray(res.data) && res.data.length) setCategories(res.data); })
+      .catch(() => setCategories(DEFAULT_CATEGORIES));
+  }, []);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -240,7 +247,7 @@ const EventsPage: React.FC = () => {
               className="w-full pl-11 pr-4 py-3.5 rounded-2xl glass text-fg text-sm placeholder-muted focus:outline-none focus:border-teal-accent transition-all" />
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {CATEGORIES.map(c => (
+            {['Tümü', ...categories].map(c => (
               <button key={c} onClick={() => setCat(c)}
                 className={`px-5 py-2 rounded-pill text-sm font-medium transition-all ${cat === c ? 'btn-gradient' : 'btn-ghost'}`}>
                 {c}

@@ -33,6 +33,10 @@ interface Order {
   total: number;
   status: string;
   items: OrderItem[];
+  home_address?: string;
+  tax_id?: string;
+  user_name?: string;
+  user_email?: string;
 }
 
 const statusCfg: Record<string, { label: string; dot: string; text: string; bg: string }> = {
@@ -185,6 +189,10 @@ const OrderHistoryPage: React.FC = () => {
           date: order.date,
           total: Number(order.total ?? 0),
           status: mapStatus(order.status),
+          home_address: order.home_address || '',
+          tax_id: order.tax_id || '',
+          user_name: order.user_name || '',
+          user_email: order.user_email || '',
           items: (order.items || []).map((item: any) => ({
             id: item.id,
             name: item.name,
@@ -255,6 +263,10 @@ const OrderHistoryPage: React.FC = () => {
         date: order.date,
         total: Number(order.total ?? 0),
         status: mapStatus(order.status),
+        home_address: order.home_address || '',
+        tax_id: order.tax_id || '',
+        user_name: order.user_name || '',
+        user_email: order.user_email || '',
         items: (order.items || []).map((item: any) => ({
           id: item.id,
           name: item.name,
@@ -334,11 +346,14 @@ const OrderHistoryPage: React.FC = () => {
             {orders.map((order, i) => {
               const sc = statusCfg[order.status] ?? statusCfg.processing;
               const isCancellable = CANCELLABLE_STATUSES.includes(order.status);
+              const hasProductB = order.items?.some(item => item.name?.includes('Product B'));
 
               return (
                 <div
                   key={order.id}
-                  className="glass hover:glass-strong rounded-3xl overflow-hidden transition-all animate-fade-up"
+                  className={`glass hover:glass-strong rounded-3xl overflow-hidden transition-all animate-fade-up ${
+                    hasProductB ? 'ring-2 ring-teal-500 bg-teal-500/5 shadow-[0_0_15px_rgba(20,184,166,0.15)]' : ''
+                  }`}
                   style={{ animationDelay: `${i * 0.07}s` }}
                 >
                   <div className="flex items-center justify-between px-6 py-4 border-b border-border">
@@ -347,6 +362,13 @@ const OrderHistoryPage: React.FC = () => {
                         <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-0.5">Sipariş No</p>
                         <p className="font-mono font-bold text-fg text-sm">{order.id}</p>
                       </div>
+                      {hasProductB && (
+                        <div>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-pill bg-teal-500/20 border border-teal-400/30 text-teal-300 text-[10px] font-black tracking-wider uppercase animate-pulse">
+                            ⭐ Demo: Product B
+                          </span>
+                        </div>
+                      )}
                       <div className="hidden sm:block">
                         <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-0.5">Tarih</p>
                         <p className="text-sm text-fg">{order.date}</p>
@@ -382,6 +404,24 @@ const OrderHistoryPage: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Delivery Address and Invoice Info (Step 3) */}
+                  {(order.home_address || order.tax_id) && (
+                    <div className="px-6 py-2.5 bg-teal-500/5 border-b border-border/50 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-fg">
+                      <div>
+                        <span className="font-bold text-teal-400">Teslimat Adresi (PM Paneli Karşılaştırma): </span>
+                        <span className="bg-teal-500/10 px-2 py-0.5 rounded text-teal-300 font-bold border border-teal-500/20 shadow-sm ml-1">
+                          {order.home_address || 'Belirtilmemiş'}
+                        </span>
+                      </div>
+                      {order.tax_id && (
+                        <div>
+                          <span className="font-semibold text-muted">TC / Vergi Kimlik No: </span>
+                          <span className="text-muted font-mono">{order.tax_id}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {order.items.map(item => {
                     const parseTurkishDate = (dateStr: string): Date => {

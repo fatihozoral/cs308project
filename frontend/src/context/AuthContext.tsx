@@ -28,12 +28,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('cart');
-    localStorage.removeItem('tickets');
-    localStorage.removeItem('cancelledOrders');
-    setAuthToken(null);
+    const savedToken = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    if (savedToken && savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        setAuthToken(savedToken);
+      } catch (e) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setAuthToken(null);
+      }
+    } else {
+      setAuthToken(null);
+    }
     setLoading(false);
   }, []);
 

@@ -349,6 +349,10 @@ async def get_orders(user=Depends(get_current_user)):
             "date": date_str,
             "total": o["total"],
             "status": o["status"],
+            "home_address": o.get("home_address"),
+            "tax_id": o.get("tax_id"),
+            "user_name": o.get("user_name"),
+            "user_email": o.get("user_email"),
             "items": items_by_order.get(o["id"], [])
         })
 
@@ -367,6 +371,43 @@ async def cancel_order(order_id: str, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
     if res.data["status"] in ("İptal Edildi", "cancelled"):
         raise HTTPException(status_code=400, detail="Sipariş zaten iptal edilmiş")
+    
+    # Restore capacities of events/categories associated with the cancelled order
+    items_res = supabase.table("order_items").select("*").eq("order_id", real_id).execute()
+    for item in (items_res.data or []):
+        event_id = item["event_id"]
+        category = item.get("category")
+        qty = item["quantity"]
+        
+        event_res = supabase.table("events").select("remaining_capacity, ticket_categories").eq("id", event_id).execute()
+        if event_res.data:
+            ev_data = event_res.data[0]
+            update_payload = {}
+
+            categories = ev_data.get("ticket_categories")
+            has_categories = isinstance(categories, list) and len(categories) > 0
+
+            if has_categories:
+                # Kategorili etkinlik: bilet kategoriye geri eklenir, toplam türetilir.
+                if category:
+                    for cat in categories:
+                        if isinstance(cat, dict) and cat.get("name") == category:
+                            cat_rem = cat.get("remaining")
+                            if cat_rem is not None:
+                                cat["remaining"] = cat_rem + qty
+                            break
+                update_payload["ticket_categories"] = categories
+                update_payload["remaining_capacity"] = sum(
+                    c.get("remaining", 0) for c in categories if isinstance(c, dict)
+                )
+            else:
+                rem_cap = ev_data.get("remaining_capacity")
+                if rem_cap is not None:
+                    update_payload["remaining_capacity"] = rem_cap + qty
+
+            if update_payload:
+                supabase.table("events").update(update_payload).eq("id", event_id).execute()
+
     supabase.table("orders").update({"status": "cancelled"}).eq("id", real_id).execute()
     return {"success": True}
 

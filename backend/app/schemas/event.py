@@ -24,6 +24,7 @@ class EventBase(BaseModel):
     warranty_status: Optional[str] = None
     distributor_info: Optional[str] = None
     discount_rate: Optional[int] = 0
+    cost: Optional[float] = None
 
 class EventCreate(EventBase):
     pass

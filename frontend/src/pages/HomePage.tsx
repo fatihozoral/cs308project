@@ -109,23 +109,48 @@ const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* User info footer */}
-      <section className="max-w-7xl mx-auto px-8 pb-16">
-        <div className="glass rounded-2xl px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-teal-dim border border-teal-DEFAULT/30 flex items-center justify-center">
-              <span className="text-sm font-bold text-teal-DEFAULT">{user?.name?.[0]?.toUpperCase()}</span>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-fg">{user?.name}</p>
-              <p className="text-xs text-muted">{user?.email}</p>
+      {/* User profile section for Demo */}
+      {user && (
+        <section className="max-w-7xl mx-auto px-8 pb-16">
+          <div className="glass-strong rounded-3xl p-8 border border-white/5 animate-fade-up">
+            <h3 className="text-lg font-bold text-fg mb-4 flex items-center gap-2">
+              👤 Müşteri Profili (Demo Bilgileri)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-sm">
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Kullanıcı ID</p>
+                <p className="text-fg font-mono truncate" title={user.id}>{user.id || 'Yükleniyor...'}</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Ad Soyad</p>
+                <p className="text-fg font-semibold">{user.name || 'Yükleniyor...'}</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">E-posta Adresi</p>
+                <p className="text-fg font-semibold">{user.email || 'Yükleniyor...'}</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">TC Kimlik / Vergi No</p>
+                <p className="text-fg font-mono">{user.tax_id || '12345678901'}</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Şifre Güvenliği</p>
+                <p className="text-teal-DEFAULT font-semibold">🔒 Hashlenmiş (Bcrypt - Supabase Auth)</p>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Rol</p>
+                <span className="inline-block glass px-3 py-1 rounded-pill text-xs text-teal-DEFAULT font-medium border border-teal-DEFAULT/20">
+                  {user.role || 'customer'}
+                </span>
+              </div>
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-1 col-span-1 md:col-span-2 lg:col-span-3">
+                <p className="text-[10px] text-muted uppercase font-bold tracking-wider">Teslimat Adresi</p>
+                <p className="text-fg leading-relaxed">{user.home_address || 'Adres girilmemiş'}</p>
+              </div>
             </div>
           </div>
-          <span className="glass px-3 py-1 rounded-pill text-xs text-teal-DEFAULT font-medium border border-teal-DEFAULT/20">
-            {user?.role}
-          </span>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 };

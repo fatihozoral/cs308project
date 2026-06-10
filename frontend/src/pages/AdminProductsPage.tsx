@@ -41,6 +41,7 @@ interface Comment {
   created_at: string;
 }
 
+const DEFAULT_CATEGORIES = ['Konser', 'Spor', 'Tiyatro', 'Festival'];
 
 const AdminProductsPage: React.FC = () => {
   const { user, logout } = useAuth();
@@ -48,6 +49,9 @@ const AdminProductsPage: React.FC = () => {
 
   const [tab, setTab] = useState<'products' | 'comments' | 'deliveries'>('products');
   const [events, setEvents] = useState<Event[]>([]);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [newCategory, setNewCategory] = useState('');
+  const [catLoading, setCatLoading] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,20 +59,9 @@ const AdminProductsPage: React.FC = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editingStock, setEditingStock] = useState<{ id: number; value: string } | null>(null);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
-  const [categories, setCategories] = useState<string[]>(['Konser', 'Spor', 'Tiyatro', 'Festival']);
-  const [newCategory, setNewCategory] = useState('');
-
-  const handleAddCategory = () => {
-    const trimmed = newCategory.trim();
-    if (trimmed && !categories.includes(trimmed)) {
-      setCategories(prev => [...prev, trimmed]);
-      setForm(p => ({ ...p, category: trimmed }));
-      setNewCategory('');
-    }
-  };
 
   const [form, setForm] = useState({
-    name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
+    name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', cost: '',
     remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '',
     place_id: '', image_url: '', lat: null as number | null, lng: null as number | null,
     model: '', serial_number: '', warranty_status: '', distributor_info: ''
@@ -79,6 +72,7 @@ const AdminProductsPage: React.FC = () => {
 
   useEffect(() => {
     fetchEvents();
+    fetchCategories();
     fetchComments();
     fetchDeliveries();
 
@@ -151,6 +145,37 @@ const AdminProductsPage: React.FC = () => {
     } finally { setLoading(false); }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/categories`);
+      if (Array.isArray(res.data) && res.data.length) setCategories(res.data);
+    } catch { setCategories(DEFAULT_CATEGORIES); }
+  };
+
+  const handleAddCategory = async () => {
+    const name = newCategory.trim();
+    if (!name) return;
+    setCatLoading(true);
+    try {
+      await axios.post(`${API_URL}/admin/categories`, { name }, { headers: getAuthHeader() });
+      setNewCategory('');
+      await fetchCategories();
+      setForm(p => ({ ...p, category: name }));
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Kategori eklenemedi.');
+    } finally { setCatLoading(false); }
+  };
+
+  const handleDeleteCategory = async (name: string) => {
+    if (!confirm(`"${name}" kategorisini silmek istediğine emin misin?`)) return;
+    try {
+      await axios.delete(`${API_URL}/admin/categories/${encodeURIComponent(name)}`, { headers: getAuthHeader() });
+      fetchCategories();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Kategori silinemedi.');
+    }
+  };
+
   const fetchComments = async () => {
     try {
       const res = await axios.get(`${API_URL}/comments/pending`, { headers: getAuthHeader() });
@@ -191,12 +216,13 @@ const AdminProductsPage: React.FC = () => {
       await axios.post(`${API_URL}/admin/events`, {
         ...form,
         price: Number(form.price),
+        cost: form.cost === '' ? null : Number(form.cost),
         total_capacity: capacity,
         remaining_capacity: capacity
       }, { headers: getAuthHeader() });
       setShowModal(false);
       setForm({
-        name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '',
+        name: '', description: '', featured_names: '', category: 'Konser', emoji: '🎵', price: '', cost: '',
         remaining_capacity: '', venue: '', city: '', event_date: '', event_time: '',
         place_id: '', image_url: '', lat: null, lng: null,
         model: '', serial_number: '', warranty_status: '', distributor_info: ''
@@ -282,6 +308,46 @@ const AdminProductsPage: React.FC = () => {
         {/* PRODUCTS TAB */}
         {tab === 'products' && (
           <div className="animate-fade-up space-y-4">
+            {/* Kategori Yönetimi */}
+            <div className="glass-strong rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-fg">Kategori Yönetimi</h3>
+                <span className="text-xs text-muted">{categories.length} kategori</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {categories.map(c => (
+                  <span key={c} className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-pill glass border border-teal-DEFAULT/20 text-sm text-fg">
+                    {c}
+                    <button
+                      onClick={() => handleDeleteCategory(c)}
+                      title="Kategoriyi sil"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-red-400 hover:bg-red-500/20 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <input
+                  value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddCategory(); }}
+                  placeholder="Yeni kategori adı (örn: Stand-up)"
+                  className="flex-1 px-4 py-2.5 rounded-xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all"
+                />
+                <button
+                  onClick={handleAddCategory}
+                  disabled={catLoading || !newCategory.trim()}
+                  className="btn-gradient px-5 py-2.5 text-sm font-bold disabled:opacity-50"
+                >
+                  {catLoading ? 'Ekleniyor...' : 'Ekle'}
+                </button>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">{events.length} etkinlik</span>
               <button onClick={() => setShowModal(true)} className="btn-gradient px-5 py-2.5 text-sm font-bold flex items-center gap-2">
@@ -486,8 +552,18 @@ const AdminProductsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border text-sm">
-                      {deliveries.map((del, i) => (
-                        <tr key={del.id} className="hover:bg-white/5 transition-colors animate-fade-up" style={{ animationDelay: `${i * 0.03}s` }}>
+                      {deliveries.map((del, i) => {
+                        const hasProductB = del.items?.some((item: any) => item.name?.includes('Product B'));
+                        return (
+                          <tr 
+                            key={del.id} 
+                            className={`transition-colors animate-fade-up ${
+                              hasProductB 
+                                ? 'bg-teal-500/10 border-l-4 border-l-teal-500 hover:bg-teal-500/15 font-medium' 
+                                : 'hover:bg-white/5'
+                            }`} 
+                            style={{ animationDelay: `${i * 0.03}s` }}
+                          >
                           {/* Sipariş ID */}
                           <td className="px-5 py-4 font-mono font-bold text-fg">
                             {del.id}
@@ -578,7 +654,8 @@ const AdminProductsPage: React.FC = () => {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -623,8 +700,13 @@ const AdminProductsPage: React.FC = () => {
                   <input required value={form.featured_names} onChange={e => setForm(p => ({ ...p, featured_names: e.target.value }))} placeholder="Örn: Tarkan, Galatasaray..." className={inputCls} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Fiyat (₺)</label>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Satış Fiyatı (₺)</label>
                   <input required type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} placeholder="250" className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Birim Maliyet (₺)</label>
+                  <input type="number" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} placeholder="150" className={inputCls} />
+                  <p className="text-[10px] text-muted-2">Kar/zarar hesabı için. Boş bırakılırsa 0 sayılır.</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted uppercase tracking-widest">Stok</label>
