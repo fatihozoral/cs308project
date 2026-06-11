@@ -16,6 +16,7 @@ import EventDetailPage from '@/pages/EventDetailPage';
 import AdminSalesPage from '@/pages/AdminSalesPage';
 import AdminProductsPage from '@/pages/AdminProductsPage';
 import WishlistPage from '@/pages/WishlistPage';
+import ProfilePage from '@/pages/ProfilePage';
 import ChatBot from '@/components/ChatBot';
 import type { UserRole } from '@/types/auth.types';
 
@@ -196,6 +197,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <WishlistPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
               </ProtectedRoute>
             }
           />

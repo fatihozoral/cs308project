@@ -349,7 +349,19 @@ const AdminProductsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">{events.length} etkinlik</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted">{events.length} etkinlik</span>
+                <button
+                  onClick={fetchEvents}
+                  disabled={loading}
+                  className="w-8 h-8 rounded-full glass hover:glass-strong flex items-center justify-center text-fg transition-all active:scale-95 disabled:opacity-50"
+                  title="Etkinlikleri Yenile"
+                >
+                  <svg className={`w-3.5 h-3.5 text-teal-DEFAULT ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19.917 14.817A7 7 0 1119 7.556m-4.556.444h4.556V3.444" />
+                  </svg>
+                </button>
+              </div>
               <button onClick={() => setShowModal(true)} className="btn-gradient px-5 py-2.5 text-sm font-bold flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
@@ -455,6 +467,19 @@ const AdminProductsPage: React.FC = () => {
         {/* COMMENTS TAB */}
         {tab === 'comments' && (
           <div className="animate-fade-up space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted">{comments.length} bekleyen yorum</span>
+              <button 
+                onClick={fetchComments} 
+                disabled={loading}
+                className="w-9 h-9 rounded-full glass hover:glass-strong flex items-center justify-center text-fg transition-all active:scale-95 disabled:opacity-50"
+                title="Yorumları Yenile"
+              >
+                <svg className={`w-4 h-4 text-teal-DEFAULT ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19.917 14.817A7 7 0 1119 7.556m-4.556.444h4.556V3.444" />
+                </svg>
+              </button>
+            </div>
             {comments.length === 0 ? (
               <div className="glass rounded-2xl p-12 text-center">
                 <p className="text-4xl mb-3">✅</p>
