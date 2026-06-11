@@ -589,14 +589,20 @@ const AdminProductsPage: React.FC = () => {
                           </td>
                           {/* Satın Alınan Ürünler */}
                           <td className="px-5 py-4">
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               {del.items && del.items.map((item: any) => (
-                                <div key={item.id} className="text-xs text-fg flex items-center gap-1.5">
-                                  <span className="inline-block w-4 h-4 rounded bg-teal-dim border border-teal-DEFAULT/20 text-[10px] text-teal-DEFAULT text-center font-bold">
-                                    {item.quantity}
-                                  </span>
-                                  <span className="font-medium text-fg truncate max-w-[150px]">{item.name}</span>
-                                  <span className="text-muted-2">({item.venue})</span>
+                                <div key={item.id} className="text-xs text-fg flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="inline-block w-4 h-4 rounded bg-teal-dim border border-teal-DEFAULT/20 text-[10px] text-teal-DEFAULT text-center font-bold">
+                                      {item.quantity}
+                                    </span>
+                                    <span className="font-semibold text-fg truncate max-w-[150px]">{item.name}</span>
+                                  </div>
+                                  <div className="text-[10px] text-muted pl-5 flex items-center gap-1.5">
+                                    <span>ID: {item.event_id}</span>
+                                    <span>•</span>
+                                    <span className="truncate max-w-[120px]">{item.venue}</span>
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -737,26 +743,7 @@ const AdminProductsPage: React.FC = () => {
                   <input value={form.emoji} onChange={e => setForm(p => ({ ...p, emoji: e.target.value }))} placeholder="🎵" className={inputCls} />
                 </div>
                 
-                {/* Physical / Technical Specs (G9) */}
-                <div className="col-span-2 mt-2 pt-2 border-t border-border/40">
-                  <h4 className="text-xs font-bold text-teal-DEFAULT uppercase tracking-wider mb-1">Fiziksel Özellikler (Mock)</h4>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Model</label>
-                  <input value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="Örn: TH-2026X" className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Seri No</label>
-                  <input value={form.serial_number} onChange={e => setForm(p => ({ ...p, serial_number: e.target.value }))} placeholder="Örn: SN-987654" className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Garanti Durumu</label>
-                  <input value={form.warranty_status} onChange={e => setForm(p => ({ ...p, warranty_status: e.target.value }))} placeholder="Örn: 2 Yıl" className={inputCls} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted uppercase tracking-widest">Distribütör</label>
-                  <input value={form.distributor_info} onChange={e => setForm(p => ({ ...p, distributor_info: e.target.value }))} placeholder="Örn: TicketHub TR" className={inputCls} />
-                </div>
+
               </div>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 btn-ghost py-3 text-sm font-semibold">İptal</button>

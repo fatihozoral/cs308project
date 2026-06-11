@@ -31,3 +31,16 @@ async def mark_notification_read(notification_id: str, user=Depends(get_current_
 async def mark_all_notifications_read(user=Depends(get_current_user)):
     res = supabase.table("notifications").update({"is_read": True}).eq("user_id", str(user.id)).execute()
     return {"success": True}
+
+@router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str, user=Depends(get_current_user)):
+    res = supabase.table("notifications").delete().eq("id", notification_id).eq("user_id", str(user.id)).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Bildirim bulunamadı")
+    return {"success": True}
+
+@router.delete("/notifications/delete-all")
+async def delete_all_notifications(user=Depends(get_current_user)):
+    res = supabase.table("notifications").delete().eq("user_id", str(user.id)).execute()
+    return {"success": True}
+

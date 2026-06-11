@@ -112,3 +112,53 @@ class TestMarkAllNotificationsRead:
         response = client.patch("/api/notifications/read-all", headers={"Authorization": "Bearer fake-token"})
         assert response.status_code == 200
         assert response.json()["success"] is True
+
+# ─── DELETE /notifications/{notification_id} ─────────────────
+
+class TestDeleteNotification:
+
+    @patch("app.api.notifications.supabase")
+    def test_delete_notification_success(self, mock_supabase):
+        """Tek bir bildirim silinebilmeli"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        delete_mock = MagicMock()
+        delete_mock.data = [{"id": "notif-1", "user_id": "user-123"}]
+        mock_supabase.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value = delete_mock
+
+        response = client.delete("/api/notifications/notif-1", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+    @patch("app.api.notifications.supabase")
+    def test_delete_notification_not_found(self, mock_supabase):
+        """Olmayan bildirim silinmek istendiğinde 404 dönmeli"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        delete_mock = MagicMock()
+        delete_mock.data = []
+        mock_supabase.table.return_value.delete.return_value.eq.return_value.eq.return_value.execute.return_value = delete_mock
+
+        response = client.delete("/api/notifications/notif-invalid", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Bildirim bulunamadı"
+
+# ─── DELETE /notifications/delete-all ───────────────────────
+
+class TestDeleteAllNotifications:
+
+    @patch("app.api.notifications.supabase")
+    def test_delete_all_notifications_success(self, mock_supabase):
+        """Kullanıcının tüm bildirimleri silinebilmeli"""
+        mock_user = make_user()
+        mock_supabase.auth.get_user.return_value = MagicMock(user=mock_user)
+
+        delete_mock = MagicMock()
+        mock_supabase.table.return_value.delete.return_value.eq.return_value.execute.return_value = delete_mock
+
+        response = client.delete("/api/notifications/delete-all", headers={"Authorization": "Bearer fake-token"})
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+

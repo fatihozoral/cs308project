@@ -68,4 +68,28 @@ async def update_comment_status(comment_id: int, body: UpdateComment, user=Depen
     res = supabase.table("comments").update({"status": body.status}).eq("id", comment_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Yorum bulunamadı")
-    return res.data[0]
+    
+    comment_data = res.data[0]
+    try:
+        u_id = comment_data.get("user_id")
+        ev_id = comment_data.get("event_id")
+        if u_id and ev_id:
+            event_res = supabase.table("events").select("name").eq("id", ev_id).execute()
+            event_name = event_res.data[0]["name"] if event_res.data else "etkinlik"
+            
+            if body.status == "approved":
+                title = "Yorumunuz Onaylandı! 💬"
+                message = f"'{event_name}' ürününe yaptığınız yorum onaylandı ve yayınlandı."
+            else:
+                title = "Yorumunuz Reddedildi ❌"
+                message = f"'{event_name}' ürününe yaptığınız yorum topluluk kurallarına uymadığı için reddedilmiştir."
+            
+            supabase.table("notifications").insert({
+                "user_id": str(u_id),
+                "title": title,
+                "message": message
+            }).execute()
+    except Exception as exc:
+        print(f"Failed to create comment notification: {exc}")
+        
+    return comment_data

@@ -265,7 +265,7 @@ const EventsPage: React.FC = () => {
                 <div className="absolute right-0 top-full mt-2 glass-strong rounded-2xl overflow-hidden z-50 min-w-[200px] py-1 shadow-xl">
                   {SORT_OPTIONS.map(([val, label]) => (
                     <button key={val} onClick={() => { setSort(val); setSortOpen(false); }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${sort === val ? 'text-teal-DEFAULT font-semibold' : 'text-fg'}`}>
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-white/5 ${sort === val ? 'text-teal font-semibold' : 'text-fg'}`}>
                       {label}
                     </button>
                   ))}
@@ -291,7 +291,7 @@ const EventsPage: React.FC = () => {
               return (
               <div key={event.id}
                 onClick={() => wishlistSelectMode ? toggleWishlistSelection(event.id) : setSelectedEvent(event)}
-                className={`glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up cursor-pointer relative ${selectedWishlistIds.has(event.id) ? 'ring-2 ring-teal-DEFAULT' : ''} ${soldOut ? 'opacity-80' : ''}`}
+                className={`glass hover:glass-strong rounded-3xl overflow-hidden flex flex-col transition-all hover:scale-[1.02] group animate-fade-up cursor-pointer relative ${selectedWishlistIds.has(event.id) ? 'ring-2 ring-teal' : ''} ${soldOut ? 'opacity-80' : ''}`}
                 style={{ animationDelay: `${i * 0.05}s` }}>
                 {/* Cover */}
                 <div className={`h-32 bg-gradient-to-br ${event.accent} flex items-center justify-center text-5xl relative overflow-hidden`}>
@@ -315,7 +315,7 @@ const EventsPage: React.FC = () => {
                     </div>
                   )}
                   {wishlistSelectMode && (
-                    <div className={`absolute top-3 right-3 w-8 h-8 rounded-full border flex items-center justify-center transition-all ${selectedWishlistIds.has(event.id) ? 'bg-teal-DEFAULT border-teal-DEFAULT text-bg' : 'glass border-white/30 text-transparent'}`}>
+                    <div className={`absolute top-3 right-3 w-8 h-8 rounded-full border flex items-center justify-center transition-all ${selectedWishlistIds.has(event.id) ? 'bg-teal border-teal text-bg' : 'glass border-white/30 text-transparent'}`}>
                       {selectedWishlistIds.has(event.id) && (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -327,7 +327,7 @@ const EventsPage: React.FC = () => {
 
                 <div className="p-5 flex flex-col flex-1 gap-3">
                   <div>
-                    <span className="text-[10px] font-bold text-teal-DEFAULT uppercase tracking-widest">{event.category}</span>
+                    <span className="text-[10px] font-bold text-teal uppercase tracking-widest">{event.category}</span>
                     <h3 className="font-bold text-fg mt-1 leading-snug">{event.name}</h3>
                   </div>
                   <div className="space-y-1 text-xs text-muted flex-1">
@@ -337,7 +337,7 @@ const EventsPage: React.FC = () => {
                       <p className="text-amber-400 font-bold animate-pulse">⚠️ Son 1 bilet kaldı!</p>
                     )}
                     {event.remaining_capacity !== undefined && !soldOut && !lastOne && (
-                      <p className="text-teal-DEFAULT font-semibold">Kalan {event.remaining_capacity} bilet</p>
+                      <p className="text-teal font-semibold">Kalan {event.remaining_capacity} bilet</p>
                     )}
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-border gap-2 flex-wrap">
@@ -353,14 +353,14 @@ const EventsPage: React.FC = () => {
                       </span>
                     ) : null}
                     {wishlistSelectMode ? (
-                      <span className={`px-4 py-1.5 rounded-pill text-xs font-bold ${selectedWishlistIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-ghost'}`}>
+                      <span className={`px-4 py-1.5 rounded-pill text-xs font-bold ${selectedWishlistIds.has(event.id) ? 'glass border border-teal/40 text-teal' : 'btn-ghost'}`}>
                         {selectedWishlistIds.has(event.id) ? 'Seçildi' : 'Seç'}
                       </span>
                     ) : (
                       <button
                         onClick={e => { e.stopPropagation(); addToCart(event); }}
                         disabled={soldOut}
-                        className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${soldOut ? 'glass border border-red-400/30 text-red-300' : addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'}`}>
+                        className={`px-4 py-1.5 rounded-pill text-xs font-bold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${soldOut ? 'glass border border-red-400/30 text-red-300' : addedIds.has(event.id) ? 'glass border border-teal/40 text-teal' : 'btn-gradient'}`}>
                         {soldOut ? 'Tükendi' : hasCats ? 'Bilet Seç' : addedIds.has(event.id) ? '✓ Eklendi' : 'Sepete Ekle'}
                       </button>
                     )}
