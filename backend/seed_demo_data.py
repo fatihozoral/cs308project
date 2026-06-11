@@ -90,7 +90,7 @@ def seed_events():
     
     demo_events = [
         {
-            "name": "Product A",
+            "name": "Anadolu Ateşi (Product A)",
             "category": "Konser",
             "event_date": (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d"),
             "event_time": "20:00",
@@ -104,7 +104,7 @@ def seed_events():
             "is_active": True
         },
         {
-            "name": "Product B",
+            "name": "Borusan Filarmoni (Product B)",
             "category": "Konser",
             "event_date": (datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d"),
             "event_time": "21:00",
@@ -118,7 +118,7 @@ def seed_events():
             "is_active": True
         },
         {
-            "name": "Product C",
+            "name": "Cem Adrian Konseri (Product C)",
             "category": "Spor",
             "event_date": (datetime.now() + timedelta(days=20)).strftime("%Y-%m-%d"),
             "event_time": "19:00",
@@ -132,7 +132,7 @@ def seed_events():
             "is_active": True
         },
         {
-            "name": "Product E",
+            "name": "Evgeny Grinko (Product E)",
             "category": "Tiyatro",
             "event_date": (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d"),
             "event_time": "20:30",
@@ -146,7 +146,7 @@ def seed_events():
             "is_active": True
         },
         {
-            "name": "Product F",
+            "name": "Fazıl Say Resitali (Product F)",
             "category": "Festival",
             "event_date": (datetime.now() + timedelta(days=25)).strftime("%Y-%m-%d"),
             "event_time": "14:00",
@@ -160,7 +160,7 @@ def seed_events():
             "is_active": True
         },
         {
-            "name": "Product G",
+            "name": "Gripin Konseri (Product G)",
             "category": "Konser",
             "event_date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
             "event_time": "20:00",
@@ -174,7 +174,7 @@ def seed_events():
             "is_active": True
         },
         {
-            "name": "Product H",
+            "name": "Hakan Altun Konseri (Product H)",
             "category": "Spor",
             "event_date": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
             "event_time": "18:00",
@@ -256,8 +256,8 @@ def seed_orders(user_id, event_ids):
         oid = order_e.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product E"],
-            "event_name": "Product E",
+            "event_id": event_ids["Evgeny Grinko (Product E)"],
+            "event_name": "Evgeny Grinko (Product E)",
             "event_date": (datetime.now() - timedelta(days=40)).strftime("%d.%m.%Y"),
             "venue": "Kadıkoy Sahne",
             "quantity": 1,
@@ -265,12 +265,12 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product E"],
+            "event_id": event_ids["Evgeny Grinko (Product E)"],
             "token": str(uuid.uuid4()),
             "is_used": True,
             "used_at": (datetime.now(timezone.utc) - timedelta(days=39)).isoformat()
         }).execute()
-        print("  - Seeded Order for Product E (Delivered 40 days ago)")
+        print("  - Seeded Order for Evgeny Grinko (Product E) (Delivered 40 days ago)")
 
     # 2. Product F (Delivered < 30 days ago)
     order_date_f = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
@@ -291,8 +291,8 @@ def seed_orders(user_id, event_ids):
         oid = order_f.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product F"],
-            "event_name": "Product F",
+            "event_id": event_ids["Fazıl Say Resitali (Product F)"],
+            "event_name": "Fazıl Say Resitali (Product F)",
             "event_date": (datetime.now() + timedelta(days=25)).strftime("%d.%m.%Y"),
             "venue": "Kilyos Beach",
             "quantity": 1,
@@ -300,11 +300,11 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product F"],
+            "event_id": event_ids["Fazıl Say Resitali (Product F)"],
             "token": str(uuid.uuid4()),
             "is_used": False
         }).execute()
-        print("  - Seeded Order for Product F (Delivered 15 days ago)")
+        print("  - Seeded Order for Fazıl Say Resitali (Product F) (Delivered 15 days ago)")
 
     # 3. Product G (Processing recently)
     order_date_g = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
@@ -325,8 +325,8 @@ def seed_orders(user_id, event_ids):
         oid = order_g.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product G"],
-            "event_name": "Product G",
+            "event_id": event_ids["Gripin Konseri (Product G)"],
+            "event_name": "Gripin Konseri (Product G)",
             "event_date": (datetime.now() + timedelta(days=30)).strftime("%d.%m.%Y"),
             "venue": "Kuruceşme Open Air",
             "quantity": 1,
@@ -334,11 +334,11 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product G"],
+            "event_id": event_ids["Gripin Konseri (Product G)"],
             "token": str(uuid.uuid4()),
             "is_used": False
         }).execute()
-        print("  - Seeded Order for Product G (Processing 2 hours ago)")
+        print("  - Seeded Order for Gripin Konseri (Product G) (Processing 2 hours ago)")
 
     # 4. Product H (In-transit recently)
     order_date_h = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -359,8 +359,8 @@ def seed_orders(user_id, event_ids):
         oid = order_h.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product H"],
-            "event_name": "Product H",
+            "event_id": event_ids["Hakan Altun Konseri (Product H)"],
+            "event_name": "Hakan Altun Konseri (Product H)",
             "event_date": (datetime.now() + timedelta(days=5)).strftime("%d.%m.%Y"),
             "venue": "Sinan Erdem Dome",
             "quantity": 1,
@@ -368,11 +368,11 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product H"],
+            "event_id": event_ids["Hakan Altun Konseri (Product H)"],
             "token": str(uuid.uuid4()),
             "is_used": False
         }).execute()
-        print("  - Seeded Order for Product H (In-transit 1 hour ago)")
+        print("  - Seeded Order for Hakan Altun Konseri (Product H) (In-transit 1 hour ago)")
 
 if __name__ == "__main__":
     print("====================================================")
