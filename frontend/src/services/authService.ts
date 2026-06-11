@@ -62,3 +62,23 @@ export function setAuthToken(token: string | null): void {
     delete axios.defaults.headers.common['Authorization'];
   }
 }
+
+/**
+ * Update user profile details
+ */
+export async function updateProfile(userData: { name?: string; email?: string; password?: string; home_address?: string }): Promise<{ message: string; user: User }> {
+  try {
+    const response = await axios.put<{ message: string; user: User }>(`${API_URL}/update`, userData, {
+      headers: getAuthHeader()
+    });
+    // If a new email is verified or changed, we might want to update local storage user token if a token was returned.
+    // In this case, we just update the user object.
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<ApiError>;
+    const message = axiosError.response?.data?.detail || axiosError.response?.data?.error;
+    if (message) throw new Error(message);
+    throw new Error('Profil güncellenemedi.');
+  }
+}
+

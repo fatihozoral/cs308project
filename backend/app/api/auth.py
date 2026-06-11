@@ -73,3 +73,61 @@ def login_user(user: UserLogin):
     except Exception as e:
         message = str(e) or "Geçersiz e-posta veya şifre."
         raise HTTPException(status_code=401, detail=f"Login failed: {message}")
+
+from app.schemas.user import UserUpdate
+from app.core.config import SUPABASE_URL, SUPABASE_KEY
+from fastapi import Header
+from supabase import create_client
+
+@router.put("/update")
+def update_user_profile(user_update: UserUpdate, authorization: str = Header(...)):
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Geçersiz yetkilendirme formatı.")
+    token = authorization.replace("Bearer ", "")
+    
+    if not supabase:
+        raise HTTPException(status_code=500, detail="Supabase bağlantısı başlatılamadı.")
+
+    try:
+        # Create user-scoped client
+        user_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        user_client.auth.set_session(access_token=token, refresh_token="")
+        
+        # Build update body
+        update_attrs = {}
+        if user_update.email:
+            update_attrs["email"] = str(user_update.email)
+        if user_update.password:
+            update_attrs["password"] = user_update.password
+            
+        metadata = {}
+        if user_update.name is not None:
+            metadata["name"] = user_update.name
+        if user_update.home_address is not None:
+            metadata["home_address"] = user_update.home_address
+            
+        if metadata:
+            update_attrs["data"] = metadata
+            
+        if not update_attrs:
+            raise HTTPException(status_code=400, detail="Güncellenecek bilgi gönderilmedi.")
+            
+        response = user_client.auth.update_user(update_attrs)
+        
+        if not response.user:
+            raise HTTPException(status_code=400, detail="Profil güncellenemedi.")
+            
+        return {
+            "message": "Profil başarıyla güncellendi.",
+            "user": {
+                "id": response.user.id,
+                "email": response.user.email,
+                "name": response.user.user_metadata.get("name", ""),
+                "role": response.user.user_metadata.get("role", "customer"),
+                "tax_id": response.user.user_metadata.get("tax_id", ""),
+                "home_address": response.user.user_metadata.get("home_address", "")
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Profil güncelleme hatası: {str(e)}")
+

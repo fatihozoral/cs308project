@@ -87,13 +87,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  /**
+   * Update user details in context and localStorage
+   */
+  const updateUser = (userData: User): void => {
+    localStorage.setItem('user', JSON.stringify(userData));
+    setUser(userData);
+  };
+
   const value: AuthContextType = {
     user,
     loading,
     login,
     logout,
     isAuthenticated,
-    getRedirectPath
+    getRedirectPath,
+    updateUser
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -44,6 +44,7 @@ export interface AuthContextType {
   logout: () => void;
   isAuthenticated: () => boolean;
   getRedirectPath: (role: UserRole) => string;
+  updateUser: (userData: User) => void;
 }
 
 export interface ApiError {
