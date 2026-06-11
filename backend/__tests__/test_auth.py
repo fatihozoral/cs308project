@@ -68,6 +68,78 @@ class TestRegisterUser:
         response = client.post("/api/auth/register", json=payload)
         assert response.status_code == 409
 
+    def test_register_missing_email_returns_422(self):
+        """Email alanı eksik olunca 422 dönmeli"""
+        payload = {
+            "name": "Test User",
+            "password": "StrongPass123!",
+            "tax_id": "12345678901",
+            "home_address": "Istanbul, Turkey"
+        }
+        response = client.post("/api/auth/register", json=payload)
+        assert response.status_code == 422
+
+    def test_register_invalid_email_format_returns_422(self):
+        """Geçersiz email formatı 422 dönmeli"""
+        payload = {
+            "name": "Test User",
+            "email": "bu-bir-email-degil",
+            "password": "StrongPass123!",
+            "tax_id": "12345678901",
+            "home_address": "Istanbul, Turkey"
+        }
+        response = client.post("/api/auth/register", json=payload)
+        assert response.status_code == 422
+
+    def test_register_missing_password_returns_422(self):
+        """Şifre alanı eksik olunca 422 dönmeli"""
+        payload = {
+            "name": "Test User",
+            "email": "test@example.com",
+            "tax_id": "12345678901",
+            "home_address": "Istanbul, Turkey"
+        }
+        response = client.post("/api/auth/register", json=payload)
+        assert response.status_code == 422
+
+    def test_register_missing_tax_id_returns_422(self):
+        """Tax ID alanı eksik olunca 422 dönmeli"""
+        payload = {
+            "name": "Test User",
+            "email": "test@example.com",
+            "password": "StrongPass123!",
+            "home_address": "Istanbul, Turkey"
+        }
+        response = client.post("/api/auth/register", json=payload)
+        assert response.status_code == 422
+
+    def test_register_missing_name_returns_422(self):
+        """İsim alanı eksik olunca 422 dönmeli"""
+        payload = {
+            "email": "test@example.com",
+            "password": "StrongPass123!",
+            "tax_id": "12345678901",
+            "home_address": "Istanbul, Turkey"
+        }
+        response = client.post("/api/auth/register", json=payload)
+        assert response.status_code == 422
+
+    def test_register_missing_home_address_returns_422(self):
+        """Adres alanı eksik olunca 422 dönmeli"""
+        payload = {
+            "name": "Test User",
+            "email": "test@example.com",
+            "password": "StrongPass123!",
+            "tax_id": "12345678901"
+        }
+        response = client.post("/api/auth/register", json=payload)
+        assert response.status_code == 422
+
+    def test_register_empty_payload_returns_422(self):
+        """Boş payload gönderilince 422 dönmeli"""
+        response = client.post("/api/auth/register", json={})
+        assert response.status_code == 422
+
 # ─── POST /auth/login ─────────────────────────────────────────
 
 class TestLoginUser:
