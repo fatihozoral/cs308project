@@ -29,6 +29,16 @@ const CardLogo: React.FC<CardLogoProps> = ({ type, className = "" }) => {
     return <span className={`font-black italic text-white/90 drop-shadow-md ${className}`}>TICKET</span>;
   }
 
+  if (type === 'Mastercard') {
+    return (
+      <svg className={`${className} select-none`} viewBox="0 0 24 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="8.5" cy="8" r="7" fill="#EB001B" />
+        <circle cx="15.5" cy="8" r="7" fill="#F79E1B" />
+        <path d="M12 2.05811C13.2985 3.51096 14.0781 5.41946 14.0781 7.50004C14.0781 9.58062 13.2985 11.4891 12 12.942C10.7015 11.4891 9.92188 9.58062 9.92188 7.50004C9.92188 5.41946 10.7015 3.51096 12 2.05811Z" fill="#FF5F00" />
+      </svg>
+    );
+  }
+
   if (hasError) {
     return <span className={`font-black italic text-white/90 drop-shadow-md ${className}`}>{type}</span>;
   }
@@ -227,15 +237,15 @@ const CartPage: React.FC = () => {
       <div className="max-w-xl mx-auto px-8 py-16 animate-fade-up">
         <div className="glass-strong rounded-3xl overflow-hidden">
           {/* Header */}
-          <div className="bg-teal-DEFAULT/20 border-b border-teal-DEFAULT/20 px-8 py-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-teal-dim border border-teal-DEFAULT/40 flex items-center justify-center flex-shrink-0">
-              <svg className="w-6 h-6 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-teal/20 border-b border-teal/20 px-8 py-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-teal-dim border border-teal/40 flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
               </svg>
             </div>
             <div>
               <h2 className="text-xl font-black text-fg">Ödeme Başarılı!</h2>
-              <p className="text-teal-DEFAULT text-sm font-semibold">Siparişiniz alındı</p>
+              <p className="text-teal text-sm font-semibold">Siparişiniz alındı</p>
             </div>
           </div>
 
@@ -263,12 +273,12 @@ const CartPage: React.FC = () => {
 
             <div className="flex justify-between items-center pt-4">
               <span className="font-black text-fg text-lg">Toplam</span>
-              <span className="font-black text-teal-DEFAULT text-2xl">₺{orderResult?.total}</span>
+              <span className="font-black text-teal text-2xl">₺{orderResult?.total}</span>
             </div>
 
             {orderResult?.invoiceEmailSent ? (
-              <div className="mt-4 flex items-center gap-2 text-xs text-muted bg-teal-DEFAULT/5 border border-teal-DEFAULT/20 rounded-2xl px-4 py-3">
-                <svg className="w-4 h-4 text-teal-DEFAULT flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="mt-4 flex items-center gap-2 text-xs text-muted bg-teal/5 border border-teal/20 rounded-2xl px-4 py-3">
+                <svg className="w-4 h-4 text-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                 </svg>
                 Fatura PDF'i <strong className="text-fg mx-1">{user?.email}</strong> adresine gönderildi.
@@ -326,15 +336,15 @@ const CartPage: React.FC = () => {
               <div key={item.cartItemId || item.id}
                 className="glass hover:glass-strong rounded-3xl p-5 flex items-center gap-4 transition-all animate-fade-up"
                 style={{ animationDelay: `${i * 0.06}s` }}>
-                <div className="w-12 h-12 rounded-2xl bg-teal-dim border border-teal-DEFAULT/20 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-6 h-6 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-12 h-12 rounded-2xl bg-teal-dim border border-teal/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-6 h-6 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"/>
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold text-fg truncate">{item.name}</h3>
                   <p className="text-xs text-muted mt-0.5">{item.date} · {item.venue}</p>
-                  <p className="text-xs text-teal-DEFAULT font-semibold mt-0.5">₺{item.price} / bilet</p>
+                  <p className="text-xs text-teal font-semibold mt-0.5">₺{item.price} / bilet</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => updateQty(item.cartItemId || item.id, -1)} className="btn-ghost w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold p-0">−</button>
@@ -374,11 +384,11 @@ const CartPage: React.FC = () => {
               <h2 className="font-bold text-fg mb-2">Ödeme Bilgileri</h2>
 
               <div style={{ perspective: '1000px' }} className="relative w-full h-48 sm:h-56 rounded-2xl mb-8 mt-2 group">
-                <div style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }} className="w-full h-full relative transition-transform duration-700 ease-in-out">
+                <div style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d', transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)', WebkitTransform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)' }} className="w-full h-full relative transition-transform duration-700 ease-in-out">
                   {/* Front */}
-                  <div style={{ backfaceVisibility: 'hidden' }} className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-teal-900 via-slate-900 to-teal-800 p-6 flex flex-col justify-between overflow-hidden shadow-2xl border border-teal-DEFAULT/30">
+                  <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(0deg)', WebkitTransform: 'rotateY(0deg)' }} className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-teal-900 via-slate-900 to-teal-800 p-6 flex flex-col justify-between overflow-hidden shadow-2xl border border-teal/30">
                     <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
-                    <div className="absolute top-[-50%] right-[-20%] w-64 h-64 bg-teal-DEFAULT/20 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="absolute top-[-50%] right-[-20%] w-64 h-64 bg-teal/20 rounded-full blur-3xl pointer-events-none"></div>
                     <div className="absolute bottom-[-20%] left-[-20%] w-48 h-48 bg-teal-accent/10 rounded-full blur-2xl pointer-events-none"></div>
                     
                     <div className="flex justify-between items-start relative z-10">
@@ -409,7 +419,7 @@ const CartPage: React.FC = () => {
                   </div>
                   
                   {/* Back */}
-                  <div style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }} className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-slate-900 to-gray-900 flex flex-col overflow-hidden shadow-2xl border border-white/10">
+                  <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden', transform: 'rotateY(180deg)', WebkitTransform: 'rotateY(180deg)' }} className="absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br from-slate-900 to-gray-900 flex flex-col overflow-hidden shadow-2xl border border-white/10">
                     <div className="w-full h-10 sm:h-12 bg-black/80 mt-6 shadow-inner"></div>
                     <div className="px-6 mt-4">
                       <div className="w-full h-10 bg-white/10 rounded-lg flex items-center justify-end px-4 backdrop-blur-md border border-white/5">
@@ -435,7 +445,7 @@ const CartPage: React.FC = () => {
                   <input type="text" value={cardNumber} onChange={e => { setCardNumber(fmtCard(e.target.value)); setPaymentErrors(p => ({ ...p, cardNumber: '' })); }} maxLength={19} required placeholder="0000 0000 0000 0000" className={inputCls(paymentErrors.cardNumber) + ' font-mono tracking-wider pr-16'}/>
                   {getCardType(cardNumber) && (
                     <div className="absolute right-3 top-2.5 flex items-center justify-center pointer-events-none">
-                      <CardLogo type={getCardType(cardNumber)} className="h-6 text-teal-DEFAULT text-lg" />
+                      <CardLogo type={getCardType(cardNumber)} className="h-6 text-teal text-lg" />
                     </div>
                   )}
                 </div>

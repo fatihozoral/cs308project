@@ -27,3 +27,7 @@ dist/
 build/
 coverage/
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/

@@ -129,8 +129,8 @@ const WishlistPage: React.FC = () => {
         <Navbar cartCount={cartCount} />
         <div className="max-w-lg mx-auto px-8 py-24 text-center animate-fade-up">
           <div className="glass-strong rounded-3xl p-12">
-            <div className="w-14 h-14 rounded-2xl bg-teal-dim border border-teal-DEFAULT/30 flex items-center justify-center mx-auto mb-5">
-              <svg className="w-7 h-7 text-teal-DEFAULT" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-14 h-14 rounded-2xl bg-teal-dim border border-teal/30 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-4-7 4V5z" />
               </svg>
             </div>
@@ -174,7 +174,7 @@ const WishlistPage: React.FC = () => {
 
               <div className="p-5 flex flex-col flex-1 gap-3">
                 <div>
-                  <span className="text-[10px] font-bold text-teal-DEFAULT uppercase tracking-widest">{event.category}</span>
+                  <span className="text-[10px] font-bold text-teal uppercase tracking-widest">{event.category}</span>
                   <h3 className="font-bold text-fg mt-1 leading-snug">{event.name}</h3>
                 </div>
                 <div className="space-y-1 text-xs text-muted flex-1">
@@ -185,19 +185,19 @@ const WishlistPage: React.FC = () => {
                   <div className="flex items-center justify-between gap-1">
                     <div className="flex flex-col">
                       <span className="font-black text-fg">₺{event.price}</span>
-                      {event.discount_rate && event.discount_rate > 0 && event.original_price && (
+                      {(event.discount_rate ?? 0) > 0 && event.original_price && (
                         <span className="text-[10px] text-muted line-through">₺{event.original_price}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-1">
-                      {event.discount_rate && event.discount_rate > 0 && (
+                      {(event.discount_rate ?? 0) > 0 && (
                         <span className="text-[9px] font-bold text-rose-400 bg-rose-400/10 border border-rose-400/30 px-1 py-0.5 rounded-full shrink-0">
                           %{event.discount_rate}
                         </span>
                       )}
                       <button
                         onClick={() => addToCart(event)}
-                        className={`px-3 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal-DEFAULT/40 text-teal-DEFAULT' : 'btn-gradient'} shrink-0`}>
+                        className={`px-3 py-1.5 rounded-pill text-xs font-bold transition-all ${addedIds.has(event.id) ? 'glass border border-teal/40 text-teal' : 'btn-gradient'} shrink-0`}>
                         {addedIds.has(event.id) ? 'Eklendi' : 'Sepete Ekle'}
                       </button>
                     </div>

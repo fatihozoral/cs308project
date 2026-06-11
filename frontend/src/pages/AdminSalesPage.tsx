@@ -16,7 +16,7 @@ const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000
 
 const CHART_WIDTH = 900;
 const CHART_HEIGHT = 260;
-const CHART_PAD = { top: 28, right: 28, bottom: 46, left: 70 };
+const CHART_PAD = { top: 40, right: 28, bottom: 46, left: 70 };
 
 interface OrderItem {
   id: number;
@@ -50,6 +50,7 @@ const AdminSalesPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   // New states for campaigns and returns
   const [activeTab, setActiveTab] = useState<'finance' | 'discounts' | 'returns'>('finance');
@@ -275,14 +276,17 @@ const AdminSalesPage: React.FC = () => {
     return true;
   });
   const totalRefunds = approvedRefunds.reduce((s: number, r: any) => s + Number(r.refund_amount || 0), 0);
-
-  const totalCogs = revenueOrders.reduce((s, o) => s + orderCogs(o), 0);
+  const rawTotalCogs = revenueOrders.reduce((s, o) => s + orderCogs(o), 0);
+  const refundedCogs = approvedRefunds.reduce((s, r) => s + (costById[r.event_id] || 0) * Number(r.quantity), 0);
+  const totalCogs = rawTotalCogs - refundedCogs;
   const netRevenue = completedRevenue - totalRefunds;
   const netProfit = netRevenue - totalCogs; // negatifse zarar
 
   const revenueByDate: Record<string, number> = {};
   const cogsByDate: Record<string, number> = {};
   const refundByDate: Record<string, number> = {};
+  const refundedCogsByDate: Record<string, number> = {};
+  
   revenueOrders.forEach(o => {
     revenueByDate[o.date] = (revenueByDate[o.date] || 0) + Number(o.total);
     cogsByDate[o.date] = (cogsByDate[o.date] || 0) + orderCogs(o);
@@ -290,34 +294,73 @@ const AdminSalesPage: React.FC = () => {
   approvedRefunds.forEach((r: any) => {
     const key = refundDate(r);
     refundByDate[key] = (refundByDate[key] || 0) + Number(r.refund_amount || 0);
+    refundedCogsByDate[key] = (refundedCogsByDate[key] || 0) + (costById[r.event_id] || 0) * Number(r.quantity);
   });
-  const chartData = Object.entries(revenueByDate)
-    .sort(([a], [b]) => parseDate(a).getTime() - parseDate(b).getTime())
-    .slice(-14)
-    .map(([date, revenue]) => ({
-      date,
-      revenue,
-      profit: revenue - (cogsByDate[date] || 0) - (refundByDate[date] || 0),
-      label: date.includes('.') ? date.slice(0, 5) : date.slice(5),
-    }));
 
-  const maxVal = Math.max(...chartData.map(point => point.revenue), 1);
+  const allDates = new Set([
+    ...Object.keys(revenueByDate),
+    ...Object.keys(refundByDate)
+  ]);
+  const sortedDates = Array.from(allDates).sort((a, b) => parseDate(a).getTime() - parseDate(b).getTime());
+
+  const chartData = sortedDates
+    .slice(-14)
+    .map(date => {
+      const revenue = revenueByDate[date] || 0;
+      const cogs = cogsByDate[date] || 0;
+      const refund = refundByDate[date] || 0;
+      const refundedCogs = refundedCogsByDate[date] || 0;
+      const profit = (revenue - cogs) - (refund - refundedCogs);
+      return {
+        date,
+        revenue,
+        profit,
+        label: date.includes('.') ? date.slice(0, 5) : date.slice(5),
+      };
+    });
+
+  const minVal = chartData.length > 0 ? Math.min(...chartData.map(point => Math.min(point.revenue, point.profit, 0))) : 0;
+  const maxVal = chartData.length > 0 ? Math.max(...chartData.map(point => Math.max(point.revenue, point.profit)), 1) : 1;
+  const valRange = maxVal - minVal;
+
   const plotWidth = CHART_WIDTH - CHART_PAD.left - CHART_PAD.right;
   const plotHeight = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
   const getX = (index: number) => CHART_PAD.left + (chartData.length === 1 ? plotWidth / 2 : (index / (chartData.length - 1)) * plotWidth);
-  const getY = (value: number) => CHART_PAD.top + plotHeight - (value / maxVal) * plotHeight;
-  const linePoints = chartData.map((point, index) => `${getX(index)},${getY(point.revenue)}`).join(' ');
-  const areaPath = chartData.length > 0
-    ? `M ${getX(0)} ${CHART_PAD.top + plotHeight} L ${chartData.map((point, index) => `${getX(index)} ${getY(point.revenue)}`).join(' L ')} L ${getX(chartData.length - 1)} ${CHART_PAD.top + plotHeight} Z`
-    : '';
-  const profitLinePoints = chartData.map((point, index) => `${getX(index)},${getY(point.profit)}`).join(' ');
-  const profitAreaPath = chartData.length > 0
-    ? `M ${getX(0)} ${CHART_PAD.top + plotHeight} L ${chartData.map((point, index) => `${getX(index)} ${getY(point.profit)}`).join(' L ')} L ${getX(chartData.length - 1)} ${CHART_PAD.top + plotHeight} Z`
-    : '';
-  const yTicks = [1, 0.75, 0.5, 0.25, 0].map(ratio => ({
-    y: CHART_PAD.top + plotHeight * (1 - ratio),
-    value: Math.round(maxVal * ratio),
-  }));
+  const getY = (value: number) => CHART_PAD.top + plotHeight - ((value - minVal) / valRange) * plotHeight;
+
+  const getCurvePath = (points: { x: number; y: number }[], closePath = false) => {
+    if (points.length === 0) return '';
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i];
+      const p1 = points[i + 1];
+      const dx = (p1.x - p0.x) / 2;
+      d += ` C ${p0.x + dx} ${p0.y}, ${p1.x - dx} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
+    if (closePath) {
+      d += ` L ${points[points.length - 1].x} ${CHART_PAD.top + plotHeight}`;
+      d += ` L ${points[0].x} ${CHART_PAD.top + plotHeight} Z`;
+    }
+    return d;
+  };
+
+  const revenuePoints = chartData.map((p, i) => ({ x: getX(i), y: getY(p.revenue) }));
+  const profitPoints = chartData.map((p, i) => ({ x: getX(i), y: getY(p.profit) }));
+
+  const areaPath = getCurvePath(revenuePoints, true);
+  const linePath = getCurvePath(revenuePoints, false);
+  const profitAreaPath = getCurvePath(profitPoints, true);
+  const profitLinePath = getCurvePath(profitPoints, false);
+
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map(ratio => {
+    const val = minVal + valRange * ratio;
+    return {
+      y: CHART_PAD.top + plotHeight * (1 - ratio),
+      value: Math.round(val),
+    };
+  });
+
+  const yZero = minVal < 0 ? getY(0) : null;
 
   const inputCls = 'px-4 py-2.5 rounded-xl glass text-fg text-sm placeholder-muted focus:outline-none transition-all';
 
@@ -336,7 +379,7 @@ const AdminSalesPage: React.FC = () => {
           <div className="w-8 h-8 rounded-xl bg-gradient-cta flex items-center justify-center">
             <svg className="w-4 h-4 text-bg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2m0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
           </div>
           <div>
@@ -419,28 +462,31 @@ const AdminSalesPage: React.FC = () => {
             {/* KPI cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {[
-                { label: 'Brüt Ciro', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', accent: 'text-teal-DEFAULT' },
-                { label: 'Toplam Maliyet', value: `₺${totalCogs.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📦', accent: 'text-amber-400' },
-                { label: 'İadeler', value: `₺${totalRefunds.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '↩️', accent: 'text-red-400' },
-                { label: netProfit >= 0 ? 'Net Kar' : 'Net Zarar', value: `₺${netProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: netProfit >= 0 ? '📈' : '📉', accent: netProfit >= 0 ? 'text-teal-accent' : 'text-red-400' },
-                { label: 'Toplam Sipariş', value: filtered.length, icon: '🎟️', accent: 'text-fg' },
-                { label: 'İptal Edilen', value: cancelledOrders.length, icon: '❌', accent: 'text-red-400' },
-              ].map(({ label, value, icon, accent }) => (
-                <div key={label} className="glass-strong rounded-2xl p-5 hover:scale-[1.02] transition-transform duration-200">
-                  <p className="text-2xl mb-2">{icon}</p>
-                  <p className={`text-xl font-black ${accent} truncate`}>{value}</p>
-                  <p className="text-[10px] text-muted uppercase tracking-widest mt-1 font-medium">{label}</p>
+                { label: 'Brüt Ciro', value: `₺${completedRevenue.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '💰', color: 'from-emerald-500/20 to-teal-500/5', border: 'border-teal-500/20', text: 'text-teal-400' },
+                { label: 'Toplam Maliyet', value: `₺${totalCogs.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '📦', color: 'from-amber-500/20 to-orange-500/5', border: 'border-amber-500/20', text: 'text-amber-400' },
+                { label: 'İadeler', value: `₺${totalRefunds.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: '↩️', color: 'from-rose-500/20 to-red-500/5', border: 'border-rose-500/20', text: 'text-rose-400' },
+                { label: netProfit >= 0 ? 'Net Kar' : 'Net Zarar', value: `₺${netProfit.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}`, icon: netProfit >= 0 ? '📈' : '📉', color: netProfit >= 0 ? 'from-teal-500/20 to-emerald-500/5' : 'from-red-500/20 to-rose-500/5', border: netProfit >= 0 ? 'border-emerald-500/20' : 'border-red-500/20', text: netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400' },
+                { label: 'Toplam Sipariş', value: filtered.length, icon: '🎟️', color: 'from-blue-500/20 to-indigo-500/5', border: 'border-blue-500/20', text: 'text-blue-400' },
+                { label: 'İptal Edilen', value: cancelledOrders.length, icon: '❌', color: 'from-gray-500/20 to-slate-500/5', border: 'border-gray-500/20', text: 'text-gray-400' },
+              ].map(({ label, value, icon, color, border, text }) => (
+                <div key={label} className={`relative overflow-hidden bg-gradient-to-br ${color} border ${border} rounded-3xl p-5 hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20 transition-all duration-300 group`}>
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-500"></div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-2xl p-2 bg-black/20 rounded-2xl backdrop-blur-sm select-none">{icon}</span>
+                  </div>
+                  <p className={`text-xl sm:text-2xl font-black ${text} tracking-tight`}>{value}</p>
+                  <p className="text-[10px] text-muted-2 uppercase tracking-widest mt-1.5 font-bold">{label}</p>
                 </div>
               ))}
             </div>
 
             {/* Revenue chart */}
             {chartData.length > 0 && (
-              <div className="glass-strong rounded-3xl p-6">
+              <div className="glass-strong rounded-3xl p-6 relative">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                   <div>
                     <h2 className="font-bold text-fg text-lg">Günlük Finansal Grafik</h2>
-                    <p className="text-xs text-muted mt-1">Son 14 günün ciro ve net kar dağılımı</p>
+                    <p className="text-xs text-muted mt-1">Son 14 günün ciro ve net kar dağılımı (Etkileşimli)</p>
                     {/* Legend */}
                     <div className="flex items-center gap-4 mt-3">
                       <div className="flex items-center gap-1.5 text-xs text-fg">
@@ -459,20 +505,20 @@ const AdminSalesPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="w-full overflow-x-auto">
+                <div className="w-full overflow-x-auto relative">
                   <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="min-w-[760px] w-full h-[300px]" role="img" aria-label="Günlük gelir ve kar grafiği">
                     <defs>
                       <linearGradient id="revenueArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.01" />
+                        <stop offset="0%" stopColor="rgb(45, 212, 191)" stopOpacity="0.2" />
+                        <stop offset="100%" stopColor="rgb(45, 212, 191)" stopOpacity="0.0" />
                       </linearGradient>
                       <linearGradient id="revenueLine" x1="0" y1="0" x2="1" y2="0">
                         <stop offset="0%" stopColor="rgb(45, 212, 191)" />
                         <stop offset="100%" stopColor="rgb(20, 184, 166)" />
                       </linearGradient>
                       <linearGradient id="profitArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="rgb(139, 92, 246)" stopOpacity="0.25" />
-                        <stop offset="100%" stopColor="rgb(139, 92, 246)" stopOpacity="0.01" />
+                        <stop offset="0%" stopColor="rgb(139, 92, 246)" stopOpacity="0.2" />
+                        <stop offset="100%" stopColor="rgb(139, 92, 246)" stopOpacity="0.0" />
                       </linearGradient>
                       <linearGradient id="profitLine" x1="0" y1="0" x2="1" y2="0">
                         <stop offset="0%" stopColor="rgb(167, 139, 250)" />
@@ -487,10 +533,10 @@ const AdminSalesPage: React.FC = () => {
                           x2={CHART_WIDTH - CHART_PAD.right}
                           y1={tick.y}
                           y2={tick.y}
-                          stroke="rgba(148, 163, 184, 0.14)"
+                          stroke="rgba(148, 163, 184, 0.08)"
                           strokeWidth="1"
                         />
-                        <text x={CHART_PAD.left - 12} y={tick.y + 4} textAnchor="end" className="fill-slate-500 text-[11px]">
+                        <text x={CHART_PAD.left - 12} y={tick.y + 4} textAnchor="end" className="fill-slate-500 text-[10px] font-semibold">
                           ₺{tick.value.toLocaleString('tr-TR')}
                         </text>
                       </g>
@@ -501,45 +547,56 @@ const AdminSalesPage: React.FC = () => {
                       x2={CHART_PAD.left}
                       y1={CHART_PAD.top}
                       y2={CHART_PAD.top + plotHeight}
-                      stroke="rgba(148, 163, 184, 0.2)"
+                      stroke="rgba(148, 163, 184, 0.15)"
                     />
                     <line
                       x1={CHART_PAD.left}
                       x2={CHART_WIDTH - CHART_PAD.right}
                       y1={CHART_PAD.top + plotHeight}
                       y2={CHART_PAD.top + plotHeight}
-                      stroke="rgba(148, 163, 184, 0.2)"
+                      stroke="rgba(148, 163, 184, 0.15)"
                     />
 
-                    {/* Revenue area & line */}
-                    <path d={areaPath} fill="url(#revenueArea)" />
-                    {chartData.length > 1 ? (
-                      <polyline points={linePoints} fill="none" stroke="url(#revenueLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                    ) : (
+                    {/* Zero Line if negative values exist */}
+                    {yZero !== null && (
                       <line
-                        x1={CHART_PAD.left + plotWidth * 0.35}
-                        x2={CHART_PAD.left + plotWidth * 0.65}
-                        y1={getY(chartData[0].revenue)}
-                        y2={getY(chartData[0].revenue)}
-                        stroke="url(#revenueLine)"
-                        strokeWidth="4"
-                        strokeLinecap="round"
+                        x1={CHART_PAD.left}
+                        x2={CHART_WIDTH - CHART_PAD.right}
+                        y1={yZero}
+                        y2={yZero}
+                        stroke="rgba(239, 68, 68, 0.3)"
+                        strokeWidth="1.5"
+                        strokeDasharray="3 3"
                       />
                     )}
 
-                    {/* Profit area & line */}
-                    <path d={profitAreaPath} fill="url(#profitArea)" />
+                    {/* Revenue Area & Line */}
+                    {chartData.length > 0 && <path d={areaPath} fill="url(#revenueArea)" />}
                     {chartData.length > 1 ? (
-                      <polyline points={profitLinePoints} fill="none" stroke="url(#profitLine)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                    ) : (
+                      <path d={linePath} fill="none" stroke="url(#revenueLine)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    ) : chartData.length === 1 ? (
+                      <circle cx={getX(0)} cy={getY(chartData[0].revenue)} r="4" fill="rgb(45, 212, 191)" />
+                    ) : null}
+
+                    {/* Profit Area & Line */}
+                    {chartData.length > 0 && <path d={profitAreaPath} fill="url(#profitArea)" />}
+                    {chartData.length > 1 ? (
+                      <path d={profitLinePath} fill="none" stroke="url(#profitLine)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    ) : chartData.length === 1 ? (
+                      <circle cx={getX(0)} cy={getY(chartData[0].profit)} r="4" fill="rgb(139, 92, 246)" />
+                    ) : null}
+
+                    {/* Interactive hover line */}
+                    {hoveredIndex !== null && (
                       <line
-                        x1={CHART_PAD.left + plotWidth * 0.35}
-                        x2={CHART_PAD.left + plotWidth * 0.65}
-                        y1={getY(chartData[0].profit)}
-                        y2={getY(chartData[0].profit)}
-                        stroke="url(#profitLine)"
-                        strokeWidth="4"
-                        strokeLinecap="round"
+                        x1={getX(hoveredIndex)}
+                        x2={getX(hoveredIndex)}
+                        y1={CHART_PAD.top}
+                        y2={CHART_PAD.top + plotHeight}
+                        stroke="rgba(255, 255, 255, 0.15)"
+                        strokeWidth="1.5"
+                        strokeDasharray="3 3"
+                        pointerEvents="none"
                       />
                     )}
 
@@ -547,38 +604,79 @@ const AdminSalesPage: React.FC = () => {
                       const x = getX(index);
                       const yRev = getY(point.revenue);
                       const yProf = getY(point.profit);
+                      const isHovered = hoveredIndex === index;
                       return (
-                        <g key={point.date}>
-                          <line
-                            x1={x}
-                            x2={x}
-                            y1={yRev}
-                            y2={CHART_PAD.top + plotHeight}
-                            stroke="rgba(45, 212, 191, 0.12)"
-                            strokeDasharray="4 5"
-                          />
-                          
-                          {/* Revenue point & label */}
-                          <circle cx={x} cy={yRev} r="6" fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth="2.5" />
-                          <circle cx={x} cy={yRev} r="2.5" fill="rgb(45, 212, 191)" />
-                          <text x={x} y={yRev - 12} textAnchor="middle" className="fill-teal-300 text-[10px] font-bold">
-                            ₺{Math.round(point.revenue).toLocaleString('tr-TR')}
-                          </text>
+                        <g key={point.date} className="transition-all duration-200">
+                          {/* Hover dots */}
+                          <circle cx={x} cy={yRev} r={isHovered ? 8 : 4.5} fill="rgb(17, 24, 39)" stroke="rgb(45, 212, 191)" strokeWidth={isHovered ? 3 : 2} />
+                          <circle cx={x} cy={yProf} r={isHovered ? 8 : 4.5} fill="rgb(17, 24, 39)" stroke="rgb(167, 139, 250)" strokeWidth={isHovered ? 3 : 2} />
 
-                          {/* Profit point & label */}
-                          <circle cx={x} cy={yProf} r="6" fill="rgb(17, 24, 39)" stroke="rgb(167, 139, 250)" strokeWidth="2.5" />
-                          <circle cx={x} cy={yProf} r="2.5" fill="rgb(167, 139, 250)" />
-                          <text x={x} y={yProf + 16} textAnchor="middle" className="fill-violet-300 text-[10px] font-bold">
-                            ₺{Math.round(point.profit).toLocaleString('tr-TR')}
-                          </text>
+                          {!isHovered && (
+                            <>
+                              <text x={x} y={yRev - 10} textAnchor="middle" className="fill-teal-300 text-[9px] font-bold opacity-75">
+                                ₺{Math.round(point.revenue).toLocaleString('tr-TR')}
+                              </text>
+                              <text x={x} y={yProf + 14} textAnchor="middle" className="fill-violet-300 text-[9px] font-bold opacity-75">
+                                ₺{Math.round(point.profit).toLocaleString('tr-TR')}
+                              </text>
+                            </>
+                          )}
 
-                          <text x={x} y={CHART_HEIGHT - 16} textAnchor="middle" className="fill-slate-400 text-[11px]">
+                          <text x={x} y={CHART_HEIGHT - 12} textAnchor="middle" className={`text-[10px] font-semibold ${isHovered ? 'fill-white font-bold' : 'fill-slate-500'}`}>
                             {point.label}
                           </text>
                         </g>
                       );
                     })}
+
+                    {/* Interactive hover overlay rects */}
+                    {chartData.map((point, index) => {
+                      const x = getX(index);
+                      const barWidth = plotWidth / Math.max(chartData.length, 1);
+                      return (
+                        <rect
+                          key={`hover-rect-${point.date}`}
+                          x={x - barWidth / 2}
+                          y={CHART_PAD.top}
+                          width={barWidth}
+                          height={plotHeight}
+                          fill="transparent"
+                          className="cursor-pointer"
+                          onMouseEnter={() => setHoveredIndex(index)}
+                          onMouseLeave={() => setHoveredIndex(null)}
+                        />
+                      );
+                    })}
                   </svg>
+
+                  {/* Interactive Tooltip */}
+                  {hoveredIndex !== null && chartData[hoveredIndex] && (() => {
+                    const pt = chartData[hoveredIndex];
+                    const yPos = Math.min(getY(pt.revenue), getY(pt.profit));
+                    const showBelow = yPos < 110;
+                    return (
+                      <div 
+                        className="absolute z-20 bg-slate-950/95 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-md text-xs space-y-1.5 pointer-events-none transition-all duration-150"
+                        style={{
+                          left: `${getX(hoveredIndex)}px`,
+                          top: `${yPos}px`,
+                          transform: showBelow ? 'translate(-50%, 15px)' : 'translate(-50%, -115%)',
+                        }}
+                      >
+                        <p className="font-black text-slate-200 border-b border-white/10 pb-1 mb-1 text-center">{pt.date}</p>
+                        <div className="flex justify-between gap-6 items-center">
+                          <span className="text-slate-400">Ciro:</span>
+                          <span className="font-bold text-teal-400">₺{Math.round(pt.revenue).toLocaleString('tr-TR')}</span>
+                        </div>
+                        <div className="flex justify-between gap-6 items-center">
+                          <span className="text-slate-400">Net Kâr:</span>
+                          <span className={`font-bold ${pt.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            ₺{Math.round(pt.profit).toLocaleString('tr-TR')}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}

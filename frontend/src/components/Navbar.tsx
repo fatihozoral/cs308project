@@ -37,12 +37,12 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      const interval = setInterval(fetchNotifications, 15000);
+      const interval = setInterval(fetchNotifications, 30000);
       return () => clearInterval(interval);
     } else {
       setNotifications([]);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!showNotifications) return;
@@ -68,6 +68,24 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     } catch (err) {
       console.error("Tüm bildirimler okunamadı:", err);
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    try {
+      await axios.delete(`${API_URL}/notifications/${id}`, { headers: getAuthHeader() });
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err) {
+      console.error("Bildirim silinemedi:", err);
+    }
+  };
+
+  const deleteAllNotifications = async () => {
+    try {
+      await axios.delete(`${API_URL}/notifications/delete-all`, { headers: getAuthHeader() });
+      setNotifications([]);
+    } catch (err) {
+      console.error("Tüm bildirimler silinemedi:", err);
     }
   };
 
@@ -97,12 +115,12 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
           <div className="hidden sm:flex items-center gap-1">
             {links.map(({ to, label }) => (
               <Link key={to} to={to}
-                className={`px-4 py-1.5 text-sm rounded-pill transition-colors ${location.pathname === to ? 'text-teal-DEFAULT font-semibold' : 'text-muted hover:text-fg'}`}>
+                className={`px-4 py-1.5 text-sm rounded-pill transition-colors ${location.pathname === to ? 'text-teal font-semibold' : 'text-muted hover:text-fg'}`}>
                 {label}
               </Link>
             ))}
             <Link to="/cart"
-              className={`relative px-4 py-1.5 text-sm rounded-pill transition-colors ${location.pathname === '/cart' ? 'text-teal-DEFAULT font-semibold' : 'text-muted hover:text-fg'}`}>
+              className={`relative px-4 py-1.5 text-sm rounded-pill transition-colors ${location.pathname === '/cart' ? 'text-teal font-semibold' : 'text-muted hover:text-fg'}`}>
               Sepet
               {cartCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-gradient-cta text-bg text-[10px] font-bold flex items-center justify-center">
@@ -117,7 +135,12 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
             {user && (
               <div className="relative" onClick={(e) => e.stopPropagation()}>
                 <button
-                  onClick={() => setShowNotifications(!showNotifications)}
+                  onClick={() => {
+                    if (!showNotifications) {
+                      fetchNotifications();
+                    }
+                    setShowNotifications(!showNotifications);
+                  }}
                   className="relative p-2 rounded-full hover:bg-fg/5 text-muted hover:text-fg transition-colors flex items-center justify-center"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,14 +155,24 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
                   <div className="absolute right-0 mt-3 w-80 max-h-96 overflow-y-auto rounded-2xl glass-strong border border-white/10 shadow-2xl p-4 z-50 animate-fade-in custom-scrollbar">
                     <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-2">
                       <span className="text-xs font-bold text-fg">Bildirimler ({notifications.filter(n => !n.is_read).length})</span>
-                      {notifications.filter(n => !n.is_read).length > 0 && (
-                        <button
-                          onClick={markAllRead}
-                          className="text-[10px] text-teal-DEFAULT hover:underline font-semibold"
-                        >
-                          Tümünü Okundu İşaretle
-                        </button>
-                      )}
+                      <div className="flex gap-2">
+                        {notifications.filter(n => !n.is_read).length > 0 && (
+                          <button
+                            onClick={markAllRead}
+                            className="text-[10px] text-teal hover:underline font-semibold"
+                          >
+                            Okundu Yap
+                          </button>
+                        )}
+                        {notifications.length > 0 && (
+                          <button
+                            onClick={deleteAllNotifications}
+                            className="text-[10px] text-rose-400 hover:underline font-semibold"
+                          >
+                            Tümünü Sil
+                          </button>
+                        )}
+                      </div>
                     </div>
                     {notifications.length === 0 ? (
                       <div className="py-8 text-center text-xs text-muted">
@@ -158,17 +191,28 @@ const Navbar: React.FC<NavbarProps> = ({ cartCount = 0 }) => {
                               <h4 className={`text-xs font-bold ${n.is_read ? 'text-fg/70' : 'text-fg'}`}>
                                 {n.title}
                               </h4>
-                              {!n.is_read && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                {!n.is_read && (
+                                  <button
+                                    onClick={() => markAsRead(n.id)}
+                                    className="w-4 h-4 rounded-full bg-teal/20 hover:bg-teal/40 flex items-center justify-center text-teal transition-colors"
+                                    title="Okundu olarak işaretle"
+                                  >
+                                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  </button>
+                                )}
                                 <button
-                                  onClick={() => markAsRead(n.id)}
-                                  className="w-4 h-4 rounded-full bg-teal-DEFAULT/20 hover:bg-teal-DEFAULT/40 flex items-center justify-center text-teal-DEFAULT transition-colors shrink-0"
-                                  title="Okundu olarak işaretle"
+                                  onClick={() => deleteNotification(n.id)}
+                                  className="w-4 h-4 rounded-full bg-rose-500/20 hover:bg-rose-500/40 flex items-center justify-center text-rose-400 transition-colors"
+                                  title="Sil"
                                 >
                                   <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
-                              )}
+                              </div>
                             </div>
                             <p className="text-[11px] mt-1 leading-relaxed">{n.message}</p>
                             <span className="text-[9px] text-muted block mt-1.5">

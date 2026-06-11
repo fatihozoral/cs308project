@@ -273,6 +273,15 @@ async def create_order(order: CreateOrder, user=Depends(get_current_user)):
     except Exception as exc:
         print(f"Invoice metadata could not be updated for order {order_code}: {exc}")
 
+    try:
+        supabase.table("notifications").insert({
+            "user_id": str(user.id),
+            "title": "Siparişiniz Alındı! 🎟️",
+            "message": f"Siparişiniz (Fatura No: {invoice_number}) başarıyla alınmıştır. Bilet detaylarınıza 'Siparişlerim' sayfasından ulaşabilirsiniz."
+        }).execute()
+    except Exception as exc:
+        print(f"Failed to create purchase notification for order {order_code}: {exc}")
+
     return {
         "id": order_code,
         "status": order_status,
@@ -409,6 +418,14 @@ async def cancel_order(order_id: str, user=Depends(get_current_user)):
                 supabase.table("events").update(update_payload).eq("id", event_id).execute()
 
     supabase.table("orders").update({"status": "cancelled"}).eq("id", real_id).execute()
+    try:
+        supabase.table("notifications").insert({
+            "user_id": str(user_id),
+            "title": "Sipariş İptal Edildi 🚫",
+            "message": f"#{format_order_id(real_id)} numaralı siparişiniz başarıyla iptal edilmiştir."
+        }).execute()
+    except Exception as exc:
+        print(f"Failed to create cancel notification: {exc}")
     return {"success": True}
 
 @router.get("/orders/all")
@@ -533,6 +550,29 @@ async def update_order_status(order_id: str, body: UpdateOrderStatus, user=Depen
     update_res = supabase.table("orders").update({"status": body.status}).eq("id", real_id).execute()
     if not update_res.data:
         raise HTTPException(status_code=500, detail="Sipariş durumu güncellenemedi")
+
+    try:
+        u_id = res.data.get("user_id")
+        if u_id:
+            formatted_id = format_order_id(real_id)
+            if body.status == "in-transit":
+                title = "Siparişiniz Yola Çıktı! 🚚"
+                message = f"#{formatted_id} numaralı siparişiniz kargoya verildi ve yola çıktı. En kısa sürede teslim edilecektir."
+            elif body.status == "delivered":
+                title = "Siparişiniz Teslim Edildi! 🎉"
+                message = f"#{formatted_id} numaralı siparişiniz teslim edildi! Biletinizi 'Siparişlerim' sayfasından kontrol edebilirsiniz."
+            else:
+                title = "Sipariş Durumu Güncellendi 🔄"
+                message = f"#{formatted_id} numaralı siparişinizin durumu '{body.status}' olarak güncellendi."
+            
+            supabase.table("notifications").insert({
+                "user_id": str(u_id),
+                "title": title,
+                "message": message
+            }).execute()
+    except Exception as exc:
+        print(f"Failed to create order status notification: {exc}")
+
     return {
         "id": format_order_id(real_id),
         "raw_id": real_id,
@@ -651,7 +691,7 @@ async def get_admin_returns(user=Depends(get_current_user)):
     orders_res = supabase.table("orders").select("id, user_name, user_email").in_("id", order_ids).execute()
     orders_map = {o["id"]: o for o in (orders_res.data or [])}
     
-    items_res = supabase.table("order_items").select("id, event_name, category").in_("id", order_item_ids).execute()
+    items_res = supabase.table("order_items").select("id, event_id, event_name, category").in_("id", order_item_ids).execute()
     items_map = {i["id"]: i for i in (items_res.data or [])}
     
     enriched = []
@@ -674,6 +714,7 @@ async def get_admin_returns(user=Depends(get_current_user)):
             "user_id": r["user_id"],
             "user_name": o.get("user_name") or "Bilinmeyen Müşteri",
             "user_email": o.get("user_email") or "",
+            "event_id": item.get("event_id"),
             "event_name": item.get("event_name") or "Etkinlik",
             "category": item.get("category") or "Bilet",
             "quantity": r["quantity"],

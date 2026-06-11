@@ -39,7 +39,7 @@ def check_tables():
 def create_or_login_customer():
     email = "customer@ticketing.com"
     password = "Customer1234!"
-    name = "Ahmet Yilmaz"
+    name = "Test User"
     tax_id = "12345678901"
     home_address = "Kadikoy, Istanbul"
     
@@ -48,6 +48,16 @@ def create_or_login_customer():
         # Try logging in first
         res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         print(f"✅ Logged in successfully. User ID: {res.user.id}")
+        # Force update user metadata to ensure name is updated to Test User
+        supabase.auth.update_user({
+            "data": {
+                "name": name,
+                "tax_id": tax_id,
+                "home_address": home_address,
+                "role": "customer"
+            }
+        })
+        print(f"✅ Updated user profile metadata (Name: {name})")
         return res.user.id
     except Exception:
         # Try signing up
@@ -80,7 +90,7 @@ def seed_events():
     
     demo_events = [
         {
-            "name": "Product A (Stoksuz)",
+            "name": "Product A",
             "category": "Konser",
             "event_date": (datetime.now() + timedelta(days=10)).strftime("%Y-%m-%d"),
             "event_time": "20:00",
@@ -91,14 +101,10 @@ def seed_events():
             "emoji": "🎵",
             "total_capacity": 100,
             "remaining_capacity": 0,
-            "is_active": True,
-            "model": "PA-100",
-            "serial_number": "SN-A111",
-            "warranty_status": "Yok",
-            "distributor_info": "TicketHub TR"
+            "is_active": True
         },
         {
-            "name": "Product B (Tek Stoklu)",
+            "name": "Product B",
             "category": "Konser",
             "event_date": (datetime.now() + timedelta(days=15)).strftime("%Y-%m-%d"),
             "event_time": "21:00",
@@ -109,14 +115,10 @@ def seed_events():
             "emoji": "🎹",
             "total_capacity": 100,
             "remaining_capacity": 1,
-            "is_active": True,
-            "model": "PB-200",
-            "serial_number": "SN-B222",
-            "warranty_status": "2 Yil",
-            "distributor_info": "TicketHub TR"
+            "is_active": True
         },
         {
-            "name": "Product C (Cok Stoklu)",
+            "name": "Product C",
             "category": "Spor",
             "event_date": (datetime.now() + timedelta(days=20)).strftime("%Y-%m-%d"),
             "event_time": "19:00",
@@ -127,14 +129,10 @@ def seed_events():
             "emoji": "⚽",
             "total_capacity": 100,
             "remaining_capacity": 45,
-            "is_active": True,
-            "model": "PC-300",
-            "serial_number": "SN-C333",
-            "warranty_status": "Yok",
-            "distributor_info": "Spor Biletleme A.S."
+            "is_active": True
         },
         {
-            "name": "Product E (Eski Alinan)",
+            "name": "Product E",
             "category": "Tiyatro",
             "event_date": (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d"),
             "event_time": "20:30",
@@ -145,14 +143,10 @@ def seed_events():
             "emoji": "🎭",
             "total_capacity": 50,
             "remaining_capacity": 0,
-            "is_active": True,
-            "model": "PE-500",
-            "serial_number": "SN-E555",
-            "warranty_status": "1 Yil",
-            "distributor_info": "Kultur Sanat Ltd."
+            "is_active": True
         },
         {
-            "name": "Product F (Iade Edilebilir)",
+            "name": "Product F",
             "category": "Festival",
             "event_date": (datetime.now() + timedelta(days=25)).strftime("%Y-%m-%d"),
             "event_time": "14:00",
@@ -163,14 +157,10 @@ def seed_events():
             "emoji": "⛺",
             "total_capacity": 500,
             "remaining_capacity": 150,
-            "is_active": True,
-            "model": "PF-600",
-            "serial_number": "SN-F666",
-            "warranty_status": "Yok",
-            "distributor_info": "Festival Organizasyon"
+            "is_active": True
         },
         {
-            "name": "Product G (Hazirlanan)",
+            "name": "Product G",
             "category": "Konser",
             "event_date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
             "event_time": "20:00",
@@ -181,14 +171,10 @@ def seed_events():
             "emoji": "🎸",
             "total_capacity": 150,
             "remaining_capacity": 120,
-            "is_active": True,
-            "model": "PG-700",
-            "serial_number": "SN-G777",
-            "warranty_status": "Yok",
-            "distributor_info": "TicketHub TR"
+            "is_active": True
         },
         {
-            "name": "Product H (Yolda)",
+            "name": "Product H",
             "category": "Spor",
             "event_date": (datetime.now() + timedelta(days=5)).strftime("%Y-%m-%d"),
             "event_time": "18:00",
@@ -199,11 +185,7 @@ def seed_events():
             "emoji": "🏀",
             "total_capacity": 80,
             "remaining_capacity": 30,
-            "is_active": True,
-            "model": "PH-800",
-            "serial_number": "SN-H888",
-            "warranty_status": "Yok",
-            "distributor_info": "Basketbol Fed."
+            "is_active": True
         }
     ]
     
@@ -250,7 +232,7 @@ def seed_orders(user_id, event_ids):
             print(f"  - Warning: could not clean orders table: {e}")
         print("  - Cleared existing order history where possible.")
         
-    customer_name = "Ahmet Yilmaz"
+    customer_name = "Test User"
     customer_email = "customer@ticketing.com"
     customer_address = "Kadikoy, Istanbul"
     customer_tax_id = "12345678901"
@@ -274,8 +256,8 @@ def seed_orders(user_id, event_ids):
         oid = order_e.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product E (Eski Alinan)"],
-            "event_name": "Product E (Eski Alinan)",
+            "event_id": event_ids["Product E"],
+            "event_name": "Product E",
             "event_date": (datetime.now() - timedelta(days=40)).strftime("%d.%m.%Y"),
             "venue": "Kadıkoy Sahne",
             "quantity": 1,
@@ -283,7 +265,7 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product E (Eski Alinan)"],
+            "event_id": event_ids["Product E"],
             "token": str(uuid.uuid4()),
             "is_used": True,
             "used_at": (datetime.now(timezone.utc) - timedelta(days=39)).isoformat()
@@ -309,8 +291,8 @@ def seed_orders(user_id, event_ids):
         oid = order_f.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product F (Iade Edilebilir)"],
-            "event_name": "Product F (Iade Edilebilir)",
+            "event_id": event_ids["Product F"],
+            "event_name": "Product F",
             "event_date": (datetime.now() + timedelta(days=25)).strftime("%d.%m.%Y"),
             "venue": "Kilyos Beach",
             "quantity": 1,
@@ -318,7 +300,7 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product F (Iade Edilebilir)"],
+            "event_id": event_ids["Product F"],
             "token": str(uuid.uuid4()),
             "is_used": False
         }).execute()
@@ -343,8 +325,8 @@ def seed_orders(user_id, event_ids):
         oid = order_g.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product G (Hazirlanan)"],
-            "event_name": "Product G (Hazirlanan)",
+            "event_id": event_ids["Product G"],
+            "event_name": "Product G",
             "event_date": (datetime.now() + timedelta(days=30)).strftime("%d.%m.%Y"),
             "venue": "Kuruceşme Open Air",
             "quantity": 1,
@@ -352,7 +334,7 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product G (Hazirlanan)"],
+            "event_id": event_ids["Product G"],
             "token": str(uuid.uuid4()),
             "is_used": False
         }).execute()
@@ -377,8 +359,8 @@ def seed_orders(user_id, event_ids):
         oid = order_h.data[0]["id"]
         supabase.table("order_items").insert({
             "order_id": oid,
-            "event_id": event_ids["Product H (Yolda)"],
-            "event_name": "Product H (Yolda)",
+            "event_id": event_ids["Product H"],
+            "event_name": "Product H",
             "event_date": (datetime.now() + timedelta(days=5)).strftime("%d.%m.%Y"),
             "venue": "Sinan Erdem Dome",
             "quantity": 1,
@@ -386,7 +368,7 @@ def seed_orders(user_id, event_ids):
         }).execute()
         supabase.table("tickets").insert({
             "order_id": oid,
-            "event_id": event_ids["Product H (Yolda)"],
+            "event_id": event_ids["Product H"],
             "token": str(uuid.uuid4()),
             "is_used": False
         }).execute()

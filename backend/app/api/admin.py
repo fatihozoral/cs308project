@@ -45,6 +45,10 @@ async def get_admin_events(user=Depends(require_product_manager)):
 @router.post("/events")
 async def create_admin_event(event: EventCreate, user=Depends(require_product_manager)):
     payload = event.model_dump(mode="json", exclude_none=True)
+    for field in ["model", "serial_number", "warranty_status", "distributor_info", "description", "featured_names", "place_id"]:
+        if payload.get(field) == "":
+            payload[field] = None
+            
     if payload.get("remaining_capacity") is None and payload.get("total_capacity") is not None:
         payload["remaining_capacity"] = payload["total_capacity"]
     res = supabase.table("events").insert(payload).execute()

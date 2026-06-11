@@ -409,7 +409,7 @@ const OrderHistoryPage: React.FC = () => {
                   {(order.home_address || order.tax_id) && (
                     <div className="px-6 py-2.5 bg-teal-500/5 border-b border-border/50 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-fg">
                       <div>
-                        <span className="font-bold text-teal-400">Teslimat Adresi (PM Paneli Karşılaştırma): </span>
+                        <span className="font-bold text-teal-400">Teslimat Adresi: </span>
                         <span className="bg-teal-500/10 px-2 py-0.5 rounded text-teal-300 font-bold border border-teal-500/20 shadow-sm ml-1">
                           {order.home_address || 'Belirtilmemiş'}
                         </span>
